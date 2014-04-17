@@ -212,6 +212,13 @@ int create_server(int port){
 		exit(EXIT_FAILURE);
 	}
 
+	/* Eliminate "Address already in use" eroor message. */
+	int flag = 1;
+	if (setsockopt(server_sock, SOL_SOCKET,SO_REUSEADDR, &flag, sizeof(flag)) == -1) {
+		perror("setsockopt");
+		exit(1);
+	}
+
 	/* Specify size of request queue */
 	if (listen(server_sock, QLEN) < 0) {
 		fprintf(stderr,"listen failed\n");
