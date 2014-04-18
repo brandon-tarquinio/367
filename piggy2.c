@@ -1,16 +1,11 @@
 /* client.c - code for example client program that uses TCP */
-#ifndef unix
-#define WIN32
-#include <windows.h>
-#include <winsock.h>
-#else
 #define closesocket close
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#endif
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -56,19 +51,18 @@ int create_client(char *host, int port);
 */
 main(int argc,char *argv[])
 {
-	#ifdef WIN32
-	WSADATA wsaData;
-	WSAStartup(0x0101, &wsaData);
-	#endif
-
 	/* loop through arguments and set values */
-	bool no_left = false; /* holds value of command line argument -noleft */
+	bool no_left = false;  /* holds value of command line argument -noleft */
 	bool no_right = false; /* Holds value of command line argument -no_right */
-	char *laddr = NULL; /* Holds the address of the left connect as either an IP address or DNS name*/
-	char *raddr = NULL; /* Holds the address of the left connect as either an IP address or DNS name*/
-	unsigned short lacctport;
-	unsigned short luseport;
-
+	char *laddr = NULL;    /* Holds the address of the left connect as either an IP address or DNS name*/
+	char *raddr = NULL;    /* Holds the address of the left connect as either an IP address or DNS name*/
+	int lacctport = 0;     /* Holds the port number will be accepted on the left connection */
+	int luseport = 0;      /* Holds the port number that will be assigned to the left connection server */
+	bool dsplr = false;    /* Holds value of command line argument -dsplr */
+	bool dsprl = false;    /* Holds value of command line argument -dsprl */
+	bool loopr = false;    /* Holds value of command line argument -loopr */
+	bool loopl = false;    /* Holds value of command line argument -loopl */
+	
 	int arg_i;
 	for (arg_i = 1; arg_i < argc; arg_i++){
 		if (strcmp(argv[arg_i],"-noleft") == 0)
@@ -76,23 +70,37 @@ main(int argc,char *argv[])
 		else if (strcmp(argv[arg_i], "-noright") == 0)
 			no_right = true;
 		else if (strcmp(argv[arg_i], "-laddr") == 0 && (arg_i + 1) < argc)
-			laddr = argv[++arg_i]; /* add check to this. Note that this will also move arg_i past val */
+			laddr = argv[++arg_i]; /* Note that this will also move arg_i past val */
 		else if (strcmp(argv[arg_i], "-raddr") == 0 && (arg_i + 1) < argc)
-			raddr = argv[++arg_i]; /* add check to this. Note that this will also move arg_i past val */
+			raddr = argv[++arg_i]; /* Note that this will also move arg_i past val */
 		else if (strcmp(argv[arg_i], "-lacctport") == 0 && (arg_i + 1) < argc)
 			lacctport = atoi(argv[++arg_i]);
 		else if (strcmp(argv[arg_i], "-luseport") == 0 && (arg_i + 1) < argc)
 			luseport = atoi(argv[++arg_i]);
+		else if (strcmp(argv[arg_i], "-dsplr") == 0)
+			dsplr = true;
+		else if (strcmp(argv[arg_i], "-dsprl") == 0)
+			dsprl = true;
+		else if (strcmp(argv[arg_i], "-loopr") == 0)
+			loopr = true;
+		else if (strcmp(argv[arg_i], "-loopl") == 0)
+			loopl = true;
 		else{
-			fprintf(stderr,"%s is not a valid option\n", argv[arg_i]);
+			fprintf(stderr,"%s is not a valid option.\n", argv[arg_i]);
 			exit(EXIT_FAILURE);
 		}
 	}
-	
+printf("value of luseport is %d\n",luseport);	
 	/* Check that there is either a left or right address (or both) */
 	if ( no_left && no_right || argc < 2){
-		printf("Piggy must have either a left or right address\n");
+		printf("Piggy must have either a left or right address.\n");
 		exit(EXIT_FAILURE);
+	}
+	
+	/* Check that display was not set to left and right */
+	if (dsplr == true && dsprl == true){
+		printf("dsplr and dsprl should not both be set. Defaulting to dsplr.\n");
+		dsprl = false;
 	}
 
 	/* Map TCP transport protocol name to protocol number */
@@ -105,10 +113,11 @@ main(int argc,char *argv[])
 	/* Set up for left side of the connection */
 	/* Acts like a server so programs can connect to piggy */
 	int left_sock; /* socket descriptors */
-	int left_port; /* protocol port number */
+	int left_port = PROTOPORT; /* protocol port number. Set to default*/
 	if (!no_left){
-		/* port value given by constant PROTOPORT */
-		left_port = PROTOPORT; /* use default port number */
+		/* If luseport is set then set left_sock to given value */
+		if (luseport != 0)
+			left_port = luseport; 
 		left_sock = create_server(left_port);	
 	} 
 	
@@ -166,6 +175,7 @@ main(int argc,char *argv[])
 		n = read(sd2, buf, sizeof(buf));
 		while (n > 0) {
 			write(right_sock,buf,n);
+			write(1,buf,n);
 			n = read(sd2, buf, sizeof(buf));
 		}
 		
@@ -191,7 +201,6 @@ int create_server(int port){
 	server_sad.sin_addr.s_addr = INADDR_ANY; /* set the local IP address */
 
 	/* port value given by constant PROTOPORT */
-	port = PROTOPORT; /* use default port number */
 	if (port > 0) /* test for illegal value */
 		server_sad.sin_port = htons((u_short)port);
 	else { /* print error message and exit */
@@ -206,17 +215,17 @@ int create_server(int port){
 		exit(EXIT_FAILURE);
 	}
 
-	/* Bind address and port in left_sad to left_sock. */
-	if (bind(server_sock, (struct sockaddr *)&server_sad, sizeof(server_sad)) < 0) {
-		fprintf(stderr,"bind failed\n");
-		exit(EXIT_FAILURE);
-	}
-
 	/* Eliminate "Address already in use" eroor message. */
 	int flag = 1;
 	if (setsockopt(server_sock, SOL_SOCKET,SO_REUSEADDR, &flag, sizeof(flag)) == -1) {
 		perror("setsockopt");
 		exit(1);
+	}
+
+	/* Bind address and port in left_sad to left_sock. */
+	if (bind(server_sock, (struct sockaddr *)&server_sad, sizeof(server_sad)) < 0) {
+		fprintf(stderr,"bind failed\n");
+		exit(EXIT_FAILURE);
 	}
 
 	/* Specify size of request queue */
