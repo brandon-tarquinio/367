@@ -51,6 +51,13 @@ int create_client(char *host, int port);
 */
 main(int argc,char *argv[])
 {
+	/* setup for select */
+	int input_ready, max_fd;
+	fd_set inputs; /* set of selector to be passed to select */
+	FD_ZERO(&inputs);
+	FD_SET(0,&inputs); /* add stdin to input fd_set */
+	max_fd = 0;
+
 	/* loop through arguments and set values */
 	bool no_left = false;  /* holds value of command line argument -noleft */
 	bool no_right = false; /* Holds value of command line argument -no_right */
@@ -90,7 +97,7 @@ main(int argc,char *argv[])
 			exit(EXIT_FAILURE);
 		}
 	}
-printf("value of luseport is %d\n",luseport);	
+	
 	/* Check that there is either a left or right address (or both) */
 	if ( no_left && no_right || argc < 2){
 		printf("Piggy must have either a left or right address.\n");
@@ -119,6 +126,9 @@ printf("value of luseport is %d\n",luseport);
 		if (luseport != 0)
 			left_port = luseport; 
 		left_sock = create_server(left_port);	
+		FD_SET(left_sock, &inputs);
+		if (left_sock > max_fd)
+			max_fd = left_sock;
 	} 
 	
 	/* if laddr is set to none wildcard value */
@@ -138,8 +148,12 @@ printf("value of luseport is %d\n",luseport);
 	int right_sock; /* socket descriptor for left side*/
 	if (no_right) 
 		right_sock = 1; /* set to stdout */
-	else if (!no_right && raddr != NULL)
+	else if (!no_right && raddr != NULL){
 		right_sock = create_client(raddr, PROTOPORT);
+		FD_SET(right_sock, &inputs);
+		if (right_sock > max_fd)
+			max_fd = right_sock;
+	}
 	else if (!no_right && raddr == NULL){
 		fprintf(stderr,"must specify -raddr or set -noright\n");
 		exit(EXIT_FAILURE);
@@ -152,34 +166,61 @@ printf("value of luseport is %d\n",luseport);
 	int alen; /* length of address */
 	char buf[1000]; /* buffer for string the server sends */
 	int n; /* number of characters read */
+	fd_set inputs_loop = inputs;
 	while (1) {
-		alen = sizeof(cad);
-		if ( !no_left && (sd2=accept(left_sock, (struct sockaddr *)&cad, &alen)) < 0) {
-			fprintf(stderr, "accept failed\n");
-			exit(EXIT_FAILURE);
-		} else if (no_left)
-			sd2 = 0; /* set left side to stdin */
-	
-		/* if -laddr was set then check if connecting IP matches. If not skip request */
-		if (laddr_hostent != NULL) {	
-			char straddr[INET_ADDRSTRLEN];	
-			struct in_addr addr, addr2;
-			memcpy(&addr, laddr_hostent->h_addr_list[0], sizeof(struct in_addr));
-			if (strcmp(inet_ntoa(addr), inet_ntop(AF_INET, &cad.sin_addr,straddr, sizeof(straddr))) != 0){
-				closesocket(sd2);
-				continue;
-			}
-		}
+		inputs_loop = inputs;
+		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,NULL);
+		fprintf(stderr,"hello\n");
 
-		/* Repeatedly read data from socket and write to user's screen. */
-		n = read(sd2, buf, sizeof(buf));
-		while (n > 0) {
-			write(right_sock,buf,n);
-			write(1,buf,n);
-			n = read(sd2, buf, sizeof(buf));
+		/* accepts incoming client from left side and assigns to sd2 */	
+		if (!no_left && FD_ISSET(left_sock,&inputs_loop)){	
+			alen = sizeof(cad);
+			if ( !no_left && (sd2=accept(left_sock, (struct sockaddr *)&cad, &alen)) < 0) {
+				fprintf(stderr, "accept failed\n");
+				exit(EXIT_FAILURE);
+			} else if (no_left)
+				sd2 = 0; /* set left side to stdin */
+	
+			/* if -laddr was set then check if connecting IP matches. If not skip request */
+			if (laddr_hostent != NULL) {	
+				char straddr[INET_ADDRSTRLEN];	
+				struct in_addr addr, addr2;
+				memcpy(&addr, laddr_hostent->h_addr_list[0], sizeof(struct in_addr));
+				if (strcmp(inet_ntoa(addr), inet_ntop(AF_INET, &cad.sin_addr,straddr, sizeof(straddr))) != 0){
+					closesocket(sd2);
+					continue;
+				}
+			}
+			
+			/* add sd2 to inputs */
+			FD_SET(sd2,&inputs);
+			if (sd2 > max_fd)
+				max_fd = sd2;
 		}
 		
-		closesocket(sd2);
+		/* read input from stdio */	
+		if (FD_ISSET(0,&inputs_loop)){
+			n = read(0,buf,sizeof(buf));
+		}
+		
+		/* read from left side. */	
+		if (!no_left && FD_ISSET(sd2,&inputs_loop)){
+			if ((n = read(sd2,buf,sizeof(buf))) == 0){
+				closesocket(sd2);
+				FD_CLR(sd2, &inputs);
+			} 
+		}
+		
+		/* read from right side. */
+		if (!no_right && FD_ISSET(right_sock, &inputs_loop)){
+			n = read(right_sock, buf,sizeof(buf));
+		}
+
+		/* output contents of buffer */
+		if (no_left && right_sock != 0)
+			write(right_sock,buf,n);
+		else if (no_right)
+			write(1,buf,n);	
 	}
 
 	/* Close the sockets. */	
