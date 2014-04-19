@@ -53,6 +53,7 @@ main(int argc,char *argv[])
 	WSAStartup(0x0101, &wsaData);
 	#endif
 
+	/* blah blah blah */
 	/* loop through arguments and set values */
 	bool no_left = false; /* holds value of command line argument -noleft */
 	bool no_right = false; /* Holds value of command line argument -no_right */
