@@ -24,7 +24,7 @@ int create_server(int port);
 int create_client(char *host, int port);
 
 /*------------------------------------------------------------------------
-* Program: piggy1
+* Program: piggy2
 *
 * Purpose: Network middleware where a client can connect to the left side
 * of piggy and piggy can also connect to a server with an address specified
@@ -164,10 +164,12 @@ main(int argc,char *argv[])
 	struct sockaddr_in cad; /* structure to hold client's address */
 	int sd2; /* socket descriptor for accept socket */
 	int alen; /* length of address */
-	char inbuf[1000]; /* buffer for string the server reads*/
-	int n_in = 0; /* number of characters read from input stream */
-	char outbuf[1000]; /* buffer for string the server sends */
-	int n_out = 0; /* number of characters read to go to output stream*/
+	char left_buf[1000]; /* buffer for string the server reads*/
+	int left_n = 0; /* number of characters read from input stream */
+	char right_buf[1000]; /* buffer for string the server sends */
+	int right_n = 0; /* number of characters read to go to output stream*/
+	char stdin_buf[1000];
+	int stdin_n = 0;	
 	fd_set inputs_loop = inputs;
 	while (1) {
 		inputs_loop = inputs;
@@ -202,34 +204,44 @@ main(int argc,char *argv[])
 		
 		/* read input from stdio */	
 		if (FD_ISSET(0,&inputs_loop)){
-			n_out = read(0,outbuf,sizeof(outbuf));
+			stdin_n = read(0,stdin_buf,sizeof(stdin_buf));
 		}
 		
 		/* read from left side. */	
 		if (!no_left && FD_ISSET(sd2,&inputs_loop)){
-			if ((n_in = read(sd2,inbuf,sizeof(inbuf))) == 0){
+			if ((left_n = read(sd2,left_buf,sizeof(left_buf))) == 0){
 				closesocket(sd2);
 				FD_CLR(sd2, &inputs);
-			} 
+			} else if (!no_right && right_sock != 0)
+				write(right_sock,left_buf,sizeof(left_buf)); 
 		}
 		
 		/* read from right side. */
 		if (!no_right && FD_ISSET(right_sock, &inputs_loop)){
-			n_in = read(right_sock, inbuf,sizeof(inbuf));
+			right_n = read(right_sock, right_buf,sizeof(right_buf));
 		}
 
 		/* output contents of buffer */
-		if (no_left && right_sock != 0 && n_out != 0){ // write stdin to right_sock
-			write(right_sock,outbuf,n_out);
-			n_out = 0;
-		} else if (no_right && sd2 != 0 && n_out != 0){ // write stdin to left_sock
-			write(sd2,outbuf,n_out);
-			n_out = 0;
-		}		
+		if (no_left && right_sock != 0 && stdin_n != 0){ // write stdin to right_sock
+			write(right_sock,stdin_buf, stdin_n);
+			stdin_n = 0;
+		} else if (no_right && sd2 != 0 && stdin_n != 0){ // write stdin to left_sock
+			write(sd2,stdin_buf, stdin_n);
+			stdin_n = 0;
+		}	
+	
+		/* check if piggy is in the middle and transfer data according to options */
+		if (!no_right && !no_left){  
+			if (dsplr && right_sock != 0 && left_n != 0)
+				write(right_sock,left_buf,left_n);
+			else if (dsprl && sd2 != 0 && right_n != 0)
+				write(sd2,right_buf,right_n);
+		}
 		
-		if (n_in != 0){	
-			write(1,inbuf,n_in);	
-			n_in = 0;
+		left_n = right_n = 0;
+		if (stdin_n != 0){	
+			write(0,stdin_buf,stdin_n);	
+			stdin_n = 0;
 		}
 	}
 
