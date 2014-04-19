@@ -164,8 +164,10 @@ main(int argc,char *argv[])
 	struct sockaddr_in cad; /* structure to hold client's address */
 	int sd2; /* socket descriptor for accept socket */
 	int alen; /* length of address */
-	char buf[1000]; /* buffer for string the server sends */
-	int n; /* number of characters read */
+	char inbuf[1000]; /* buffer for string the server reads*/
+	int n_in = 0; /* number of characters read from input stream */
+	char outbuf[1000]; /* buffer for string the server sends */
+	int n_out = 0; /* number of characters read to go to output stream*/
 	fd_set inputs_loop = inputs;
 	while (1) {
 		inputs_loop = inputs;
@@ -200,12 +202,12 @@ main(int argc,char *argv[])
 		
 		/* read input from stdio */	
 		if (FD_ISSET(0,&inputs_loop)){
-			n = read(0,buf,sizeof(buf));
+			n_out = read(0,outbuf,sizeof(outbuf));
 		}
 		
 		/* read from left side. */	
 		if (!no_left && FD_ISSET(sd2,&inputs_loop)){
-			if ((n = read(sd2,buf,sizeof(buf))) == 0){
+			if ((n_in = read(sd2,inbuf,sizeof(inbuf))) == 0){
 				closesocket(sd2);
 				FD_CLR(sd2, &inputs);
 			} 
@@ -213,14 +215,22 @@ main(int argc,char *argv[])
 		
 		/* read from right side. */
 		if (!no_right && FD_ISSET(right_sock, &inputs_loop)){
-			n = read(right_sock, buf,sizeof(buf));
+			n_in = read(right_sock, inbuf,sizeof(inbuf));
 		}
 
 		/* output contents of buffer */
-		if (no_left && right_sock != 0)
-			write(right_sock,buf,n);
-		else if (no_right)
-			write(1,buf,n);	
+		if (no_left && right_sock != 0 && n_out != 0){ // write stdin to right_sock
+			write(right_sock,outbuf,n_out);
+			n_out = 0;
+		} else if (no_right && sd2 != 0 && n_out != 0){ // write stdin to left_sock
+			write(sd2,outbuf,n_out);
+			n_out = 0;
+		}		
+		
+		if (n_in != 0){	
+			write(1,inbuf,n_in);	
+			n_in = 0;
+		}
 	}
 
 	/* Close the sockets. */	
