@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#define PROTOPORT 37690 /* default protocol port number */
+#define PROTOPORT 36790 /* default protocol port number */
 #define QLEN 6 /* size of request queue */
 extern int errno;
 typedef enum { false, true } bool;
@@ -226,14 +226,14 @@ main(int argc,char *argv[])
 						command_length = command_i;
 					}
 					command[++command_length]= 0;
-					printf("argument is %s\n", command);
-					printf("the value of strcmp(command,""noleft"", %d\n",strcmp(command,"noleft"));
+					//printf("argument is %s\n", command);
+					//printf("the value of strcmp(command,""noleft"", %d\n",strcmp(command,"noleft"));
 					/*check if valid command and set appropriate flag*/
-					if (strcmp(command,"noleft") == 0){
-						printf("noleft is set to true");
+					if (strncmp(command,"noleft",6) == 0){
+						printf("noleft is set to true\n");
 						no_left = true;}
-					else if (strcmp(command,"noright") == 0){
-						printf("noright is set to true");
+					else if (strncmp(command,"noright",6) == 0){
+						printf("noright is set to true\n");
 						no_right = true;}
 					else
 						fprintf(stderr,"Not a valid command :%s\n",command);
