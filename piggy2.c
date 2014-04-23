@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#define PROTOPORT 36790 /* default protocol port number */
+#define PROTOPORT 37690 /* default protocol port number */
 #define QLEN 6 /* size of request queue */
 extern int errno;
 typedef enum { false, true } bool;
@@ -212,8 +212,8 @@ main(int argc,char *argv[])
 			if ((left_n = read(sd2,left_buf,sizeof(left_buf))) == 0){
 				closesocket(sd2);
 				FD_CLR(sd2, &inputs);
-			} else if (!no_right && right_sock != 0)
-				write(right_sock,left_buf,sizeof(left_buf)); 
+			} //else if (!no_right && right_sock != 0)
+			//	write(right_sock,left_buf,sizeof(left_buf)); 
 		}
 		
 		/* read from right side. */
@@ -222,22 +222,34 @@ main(int argc,char *argv[])
 		}
 
 		/* output contents of buffer */
-		if (no_left && right_sock != 0 && stdin_n != 0){ // write stdin to right_sock
+		if (!no_left && right_sock != 0 && stdin_n != 0){ // write stdin to right_sock
 			write(right_sock,stdin_buf, stdin_n);
 			stdin_n = 0;
-		} else if (no_right && sd2 != 0 && stdin_n != 0){ // write stdin to left_sock
+		} else if (!no_right && sd2 != 0 && stdin_n != 0){ // write stdin to left_sock
 			write(sd2,stdin_buf, stdin_n);
 			stdin_n = 0;
 		}	
 	
 		/* check if piggy is in the middle and transfer data according to options */
 		if (!no_right && !no_left){  
-			if (dsplr && right_sock != 0 && left_n != 0)
+			if (right_sock != 0 && left_n != 0){
 				write(right_sock,left_buf,left_n);
-			else if (dsprl && sd2 != 0 && right_n != 0)
+				if (dsplr)
+					write(0,left_buf,left_n);
+			}
+			else if (sd2 != 0 && right_n != 0){
 				write(sd2,right_buf,right_n);
-		}
-		
+				if (dsprl)
+					write(0,left_buf,left_n);
+			}
+		}	
+		/* if piggy has noright set, then display left data to stdout */
+		else if (no_right && left_n != 0)
+			write(0,left_buf,left_n);
+		/* if piggy has no_left set, then display right data to stdout */ 
+		else if (no_left && right_n != 0)
+			write(0,right_buf,right_n);
+
 		left_n = right_n = 0;
 		if (stdin_n != 0){	
 			write(0,stdin_buf,stdin_n);	
