@@ -174,7 +174,7 @@ main(int argc,char *argv[])
 	while (1) {
 		inputs_loop = inputs;
 		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,NULL);
-		fprintf(stderr,"hello\n");
+		//fprintf(stderr,"hello\n");
 
 		/* accepts incoming client from left side and assigns to sd2 */	
 		if (!no_left && FD_ISSET(left_sock,&inputs_loop)){	
@@ -205,6 +205,44 @@ main(int argc,char *argv[])
 		/* read input from stdio */	
 		if (FD_ISSET(0,&inputs_loop)){
 			stdin_n = read(0,stdin_buf,sizeof(stdin_buf));
+			/* process input commands */
+			char cur_char;
+			char command[10];
+			int command_length = 0;
+			int i,command_i;
+			for ( i = 0; i < stdin_n; i++){
+				cur_char = stdin_buf[i];
+				if (cur_char == 'q'){
+					/* Close the sockets. */	
+					closesocket(right_sock);
+					closesocket(left_sock);
+
+					/* Terminate the piggy gracefully. */
+					exit(0);}
+				else if (cur_char == ':'){
+					/*put command into command[]*/
+					for (command_i = 0;((i + 1) <= stdin_n) && (cur_char = stdin_buf[++i]) != ' '; command_i++){
+						command[command_i] = cur_char;
+						command_length = command_i;
+					}
+					command[++command_length]= 0;
+					printf("argument is %s\n", command);
+					printf("the value of strcmp(command,""noleft"", %d\n",strcmp(command,"noleft"));
+					/*check if valid command and set appropriate flag*/
+					if (strcmp(command,"noleft") == 0){
+						printf("noleft is set to true");
+						no_left = true;}
+					else if (strcmp(command,"noright") == 0){
+						printf("noright is set to true");
+						no_right = true;}
+					else
+						fprintf(stderr,"Not a valid command :%s\n",command);
+					
+					break;
+				}
+				else
+					break;
+			}
 		}
 		
 		/* read from left side. */	
@@ -212,8 +250,7 @@ main(int argc,char *argv[])
 			if ((left_n = read(sd2,left_buf,sizeof(left_buf))) == 0){
 				closesocket(sd2);
 				FD_CLR(sd2, &inputs);
-			} //else if (!no_right && right_sock != 0)
-			//	write(right_sock,left_buf,sizeof(left_buf)); 
+			}
 		}
 		
 		/* read from right side. */
@@ -222,12 +259,12 @@ main(int argc,char *argv[])
 		}
 
 		/* output contents of buffer */
-		if (!no_left && right_sock != 0 && stdin_n != 0){ // write stdin to right_sock
+		if (no_left && right_sock != 0 && stdin_n != 0){ // write stdin to right_sock
 			write(right_sock,stdin_buf, stdin_n);
-			stdin_n = 0;
-		} else if (!no_right && sd2 != 0 && stdin_n != 0){ // write stdin to left_sock
+//			stdin_n = 0;
+		} else if (no_right && sd2 != 0 && stdin_n != 0){ // write stdin to left_sock
 			write(sd2,stdin_buf, stdin_n);
-			stdin_n = 0;
+//			stdin_n = 0;
 		}	
 	
 		/* check if piggy is in the middle and transfer data according to options */
@@ -237,10 +274,10 @@ main(int argc,char *argv[])
 				if (dsplr)
 					write(0,left_buf,left_n);
 			}
-			else if (sd2 != 0 && right_n != 0){
+			if (sd2 != 0 && right_n != 0){
 				write(sd2,right_buf,right_n);
 				if (dsprl)
-					write(0,left_buf,left_n);
+					write(0,right_buf,right_n);
 			}
 		}	
 		/* if piggy has noright set, then display left data to stdout */
@@ -250,19 +287,13 @@ main(int argc,char *argv[])
 		else if (no_left && right_n != 0)
 			write(0,right_buf,right_n);
 
-		left_n = right_n = 0;
-		if (stdin_n != 0){	
-			write(0,stdin_buf,stdin_n);	
-			stdin_n = 0;
-		}
+		left_n = right_n = stdin_n = 0;
+		//if (stdin_n != 0){	
+		//	write(0,stdin_buf,stdin_n);	
+	//		stdin_n = 0;
+	//	}
+		stdin_n = 0;
 	}
-
-	/* Close the sockets. */	
-	closesocket(right_sock);
-	closesocket(left_sock);
-
-	/* Terminate the client program gracefully. */
-	exit(0);
 }
 
 
