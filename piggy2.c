@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#define PROTOPORT 36790 /* default protocol port number */
+#define PROTOPORT 37690 /* default protocol port number */
 #define QLEN 6 /* size of request queue */
 extern int errno;
 typedef enum { false, true } bool;
@@ -24,7 +24,7 @@ int create_server(int port);
 int create_client(char *host, int port);
 
 /*------------------------------------------------------------------------
-* Program: piggy1
+* Program: piggy2
 *
 * Purpose: Network middleware where a client can connect to the left side
 * of piggy and piggy can also connect to a server with an address specified
@@ -164,8 +164,12 @@ main(int argc,char *argv[])
 	struct sockaddr_in cad; /* structure to hold client's address */
 	int sd2; /* socket descriptor for accept socket */
 	int alen; /* length of address */
-	char buf[1000]; /* buffer for string the server sends */
-	int n; /* number of characters read */
+	char left_buf[1000]; /* buffer for string the server reads*/
+	int left_n = 0; /* number of characters read from input stream */
+	char right_buf[1000]; /* buffer for string the server sends */
+	int right_n = 0; /* number of characters read to go to output stream*/
+	char stdin_buf[1000];
+	int stdin_n = 0;	
 	fd_set inputs_loop = inputs;
 	while (1) {
 		inputs_loop = inputs;
@@ -200,27 +204,57 @@ main(int argc,char *argv[])
 		
 		/* read input from stdio */	
 		if (FD_ISSET(0,&inputs_loop)){
-			n = read(0,buf,sizeof(buf));
+			stdin_n = read(0,stdin_buf,sizeof(stdin_buf));
 		}
 		
 		/* read from left side. */	
 		if (!no_left && FD_ISSET(sd2,&inputs_loop)){
-			if ((n = read(sd2,buf,sizeof(buf))) == 0){
+			if ((left_n = read(sd2,left_buf,sizeof(left_buf))) == 0){
 				closesocket(sd2);
 				FD_CLR(sd2, &inputs);
-			} 
+			} //else if (!no_right && right_sock != 0)
+			//	write(right_sock,left_buf,sizeof(left_buf)); 
 		}
 		
 		/* read from right side. */
 		if (!no_right && FD_ISSET(right_sock, &inputs_loop)){
-			n = read(right_sock, buf,sizeof(buf));
+			right_n = read(right_sock, right_buf,sizeof(right_buf));
 		}
 
 		/* output contents of buffer */
-		if (no_left && right_sock != 0)
-			write(right_sock,buf,n);
-		else if (no_right)
-			write(1,buf,n);	
+		if (!no_left && right_sock != 0 && stdin_n != 0){ // write stdin to right_sock
+			write(right_sock,stdin_buf, stdin_n);
+			stdin_n = 0;
+		} else if (!no_right && sd2 != 0 && stdin_n != 0){ // write stdin to left_sock
+			write(sd2,stdin_buf, stdin_n);
+			stdin_n = 0;
+		}	
+	
+		/* check if piggy is in the middle and transfer data according to options */
+		if (!no_right && !no_left){  
+			if (right_sock != 0 && left_n != 0){
+				write(right_sock,left_buf,left_n);
+				if (dsplr)
+					write(0,left_buf,left_n);
+			}
+			else if (sd2 != 0 && right_n != 0){
+				write(sd2,right_buf,right_n);
+				if (dsprl)
+					write(0,left_buf,left_n);
+			}
+		}	
+		/* if piggy has noright set, then display left data to stdout */
+		else if (no_right && left_n != 0)
+			write(0,left_buf,left_n);
+		/* if piggy has no_left set, then display right data to stdout */ 
+		else if (no_left && right_n != 0)
+			write(0,right_buf,right_n);
+
+		left_n = right_n = 0;
+		if (stdin_n != 0){	
+			write(0,stdin_buf,stdin_n);	
+			stdin_n = 0;
+		}
 	}
 
 	/* Close the sockets. */	
