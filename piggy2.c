@@ -190,7 +190,8 @@ main(int argc,char *argv[])
 				char straddr[INET_ADDRSTRLEN];	
 				struct in_addr addr;
 				memcpy(&addr, laddr_hostent->h_addr_list[0], sizeof(struct in_addr));
-				printf("the value in hostent is %s\n", inet_ntoa(addr));
+				printf("the value in hostent is %s\n", inet_ntop(AF_INET,*(laddr_hostent->h_addr_list),straddr,sizeof(straddr)));
+	printf("the value in hostent is %s\n", inet_ntoa(addr));
 				printf("the value in cad is %s\n",inet_ntoa(cad.sin_addr));
 				if (strcmp(inet_ntoa(addr), inet_ntop(AF_INET, &cad.sin_addr,straddr, sizeof(straddr))) != 0){
 					printf("this is where i should be\n");
