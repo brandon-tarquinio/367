@@ -162,14 +162,16 @@ main(int argc,char *argv[])
 	/* Pass data from left_sock to right_sock */	
 	/* Main server loop - accept and handle requests */
 	struct sockaddr_in cad; /* structure to hold client's address */
-	int sd2; /* socket descriptor for accept socket */
+	int sd2 = -1; /* socket descriptor for accept socket */
 	int alen; /* length of address */
 	char left_buf[1000]; /* buffer for string the server reads*/
 	int left_n = 0; /* number of characters read from input stream */
 	char right_buf[1000]; /* buffer for string the server sends */
 	int right_n = 0; /* number of characters read to go to output stream*/
 	char stdin_buf[1000];
-	int stdin_n = 0;	
+	int stdin_n = 0;
+	bool outputr = false;
+	bool outputl = false;	
 	fd_set inputs_loop = inputs;
 	while (1) {
 		inputs_loop = inputs;
@@ -182,8 +184,7 @@ main(int argc,char *argv[])
 			if ( !no_left && (sd2=accept(left_sock, (struct sockaddr *)&cad, &alen)) < 0) {
 				fprintf(stderr, "accept failed\n");
 				exit(EXIT_FAILURE);
-			} else if (no_left)
-				sd2 = 0; /* set left side to stdin */
+			} 
 	
 			/* if -laddr was set then check if connecting IP matches. If not skip request */
 			if (laddr_hostent != NULL) {	
@@ -202,47 +203,55 @@ main(int argc,char *argv[])
 				max_fd = sd2;
 		}
 		
-		/* read input from stdio */	
+		/* read input from stdin */	
 		if (FD_ISSET(0,&inputs_loop)){
-			stdin_n = read(0,stdin_buf,sizeof(stdin_buf));
 			/* process input commands */
 			char cur_char;
 			char command[10];
 			int command_length = 0;
-			int i,command_i;
-			for ( i = 0; i < stdin_n; i++){
-				cur_char = stdin_buf[i];
-				if (cur_char == 'q'){
-					/* Close the sockets. */	
-					closesocket(right_sock);
-					closesocket(left_sock);
-
-					/* Terminate the piggy gracefully. */
-					exit(0);}
+			int command_i;
+			while ((cur_char = getchar()) != '\n' && cur_char != EOF){
+				/* Insert Mode */
+				if (cur_char == 'i'){
+					getchar(); /* throw away the newline from entering i */
+					printf("Now in insert Mode (press Esc and hit Enter to exit):\n");	
+					while ((cur_char = getchar()) != 27){
+						stdin_buf[stdin_n++] = cur_char;
+					}
+					stdin_buf[stdin_n] = 0;// make it a proper string	
+					printf("Leaving insert Mode\n");
+					break;}	
+				/* Command Mode */	
 				else if (cur_char == ':'){
 					/*put command into command[]*/
-					for (command_i = 0;((i + 1) <= stdin_n) && (cur_char = stdin_buf[++i]) != ' '; command_i++){
+					for (command_i = 0;(cur_char = getchar()) != EOF && cur_char != '\n' && cur_char != ' '; command_i++){
 						command[command_i] = cur_char;
 						command_length = command_i;
 					}
 					command[++command_length]= 0;
-					//printf("argument is %s\n", command);
-					//printf("the value of strcmp(command,""noleft"", %d\n",strcmp(command,"noleft"));
+					
 					/*check if valid command and set appropriate flag*/
-					if (strncmp(command,"noleft",6) == 0){
+					if (strncmp(command,"q",command_length) == 0){
+						/* Close the sockets. */	
+						closesocket(right_sock);
+						closesocket(left_sock);
+
+						/* Terminate the piggy gracefully. */
+						exit(0);}
+					else if (strncmp(command,"noleft",command_length) == 0){
 						printf("noleft is set to true\n");
 						no_left = true;}
-					else if (strncmp(command,"noright",6) == 0){
+					else if (strncmp(command,"noright",command_length) == 0){
 						printf("noright is set to true\n");
 						no_right = true;}
 					else
-						fprintf(stderr,"Not a valid command :%s\n",command);
-					
+						fprintf(stderr,"Not a valid command :%s\n",command);	
 					break;
 				}
 				else
 					break;
 			}
+			__fpurge(stdin);
 		}
 		
 		/* read from left side. */	
@@ -259,12 +268,10 @@ main(int argc,char *argv[])
 		}
 
 		/* output contents of buffer */
-		if (no_left && right_sock != 0 && stdin_n != 0){ // write stdin to right_sock
+		if ((no_left || outputr || (!no_left && !no_right)) && right_sock != 0 && stdin_n != 0){ // write stdin to right_sock
 			write(right_sock,stdin_buf, stdin_n);
-//			stdin_n = 0;
-		} else if (no_right && sd2 != 0 && stdin_n != 0){ // write stdin to left_sock
+		} else if ((no_right || outputl) && sd2 != 0 && stdin_n != 0){ // write stdin to left_sock
 			write(sd2,stdin_buf, stdin_n);
-//			stdin_n = 0;
 		}	
 	
 		/* check if piggy is in the middle and transfer data according to options */
@@ -272,27 +279,26 @@ main(int argc,char *argv[])
 			if (right_sock != 0 && left_n != 0){
 				write(right_sock,left_buf,left_n);
 				if (dsplr)
-					write(0,left_buf,left_n);
+					printf("%.*s",left_n,left_buf);
 			}
 			if (sd2 != 0 && right_n != 0){
 				write(sd2,right_buf,right_n);
 				if (dsprl)
-					write(0,right_buf,right_n);
+					printf("%.*s",right_n,right_buf);
 			}
 		}	
 		/* if piggy has noright set, then display left data to stdout */
-		else if (no_right && left_n != 0)
-			write(0,left_buf,left_n);
+		else if (no_right && left_n != 0){
+			printf("%.*s",left_n,left_buf);
+		}
 		/* if piggy has no_left set, then display right data to stdout */ 
 		else if (no_left && right_n != 0)
-			write(0,right_buf,right_n);
+			printf("%.*s",right_n,right_buf);
 
+	//	printf("this is the end\n");
+	
+		/*clean up*/
 		left_n = right_n = stdin_n = 0;
-		//if (stdin_n != 0){	
-		//	write(0,stdin_buf,stdin_n);	
-	//		stdin_n = 0;
-	//	}
-		stdin_n = 0;
 	}
 }
 
