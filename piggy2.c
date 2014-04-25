@@ -1,4 +1,3 @@
-/* client.c - code for example client program that uses TCP */
 #define closesocket close
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -34,10 +33,15 @@ int create_client(char *host, int port);
 * Syntax: piggy -option 
 *
 * Options:
-* laddr   - specifies what address the server can accept. 
-* raddr   - specifies what address piggy should connect to.
-* noleft  - flags that piggy should use stdin for it's left side.
-* noright - flags that piggy should use stdout for it's right side.
+* laddr    - specifies what address the server can accept. 
+* raddr    - specifies what address piggy should connect to.
+* noleft   - flags that piggy should use stdin for it's left side.
+* noright  - flags that piggy should use stdout for it's right side.
+* luseport - Port to use for left side server.
+* dsplr    - If piggy has left and right side then only left to right data is displayed.
+* dsprl    - If piggy has left and right side then only right to left data is displayed.
+* loopr    - Data from the left that would be written to the right is looped back to the left.
+* loopl    - Data from the right that would be written to the left is looped back to the right.
 *
 * The address for laddr and raddr can be a dotted IP address or
 * a DNS name and the value must directly follow the argument.
@@ -179,9 +183,9 @@ main(int argc,char *argv[])
 		if (!no_left && FD_ISSET(left_sock,&inputs_loop)){	
 			alen = sizeof(cad);
 			if ( !no_left && (sd2=accept(left_sock, (struct sockaddr *)&cad, &alen)) < 0) {
-				fprintf(stderr, "accept failed\n");
-				exit(EXIT_FAILURE);
+				fprintf(stderr, "accept failed on left side.\n");
 			} 
+			
 			/* if -laddr was set then check if connecting IP matches. If not skip request */
 			if (laddr_hostent != NULL) {
 				char straddr[INET_ADDRSTRLEN];	
@@ -192,12 +196,11 @@ main(int argc,char *argv[])
 					sd2 = -1;	
 					continue;
 				}
-				else
-					printf("Piggy established a valid left connection.\n"); 
 			}
-			
+			printf("Piggy established a valid left connection.\n"); 
+				
 			/* add sd2 to inputs */
-			if (sd2 != -1){
+			if (sd2 > 0){
 				FD_SET(sd2,&inputs);
 				if (sd2 > max_fd)
 					max_fd = sd2;
@@ -351,6 +354,7 @@ main(int argc,char *argv[])
 
 
 /* function that creates, binds, and calls listen on a socket. */
+/* Returns socket_id of created socket or -1 if a failer occured */
 int create_server(int port){
 	struct sockaddr_in server_sad; /* structure to hold server's address */
 	int server_sock; /* socket descriptors */
@@ -398,6 +402,7 @@ int create_server(int port){
 
 /* Returns a socket descriptor of a socket connected to given
 *  host (IP or host name) and port */
+/* Returns socket_id of created socket or -1 if a failer occured */
 int create_client(char *host, int port){
 	struct hostent *ptrh; /* pointer to a host table entry */
 	struct sockaddr_in client_sad; /* structure to hold an IP address */
