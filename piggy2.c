@@ -134,7 +134,6 @@ main(int argc,char *argv[])
 		/* Convert laddr to equivalant IP address and save to compare to the address
 	  	 of the incoming client */
 		if (laddr != NULL && strcmp(laddr,"*") != 0){
-			printf("the value of laddr is %s\n",laddr);
 			laddr_hostent = gethostbyname(laddr);
 			if ( ((char *)laddr_hostent) == NULL ) {
 				fprintf(stderr,"invalid host: %s. Defaulting to allowing any address.\n", laddr);
@@ -183,18 +182,12 @@ main(int argc,char *argv[])
 				fprintf(stderr, "accept failed\n");
 				exit(EXIT_FAILURE);
 			} 
-			printf("im here\n");	
 			/* if -laddr was set then check if connecting IP matches. If not skip request */
 			if (laddr_hostent != NULL) {
-				printf("now im here\n");	
 				char straddr[INET_ADDRSTRLEN];	
 				struct in_addr addr;
 				memcpy(&addr, laddr_hostent->h_addr_list[0], sizeof(struct in_addr));
-				printf("the value in hostent is %s\n", inet_ntop(AF_INET,*(laddr_hostent->h_addr_list),straddr,sizeof(straddr)));
-				printf("the value in hostent is %s\n", inet_ntoa(addr));
-				printf("the value in cad is %s\n",inet_ntoa(cad.sin_addr));
 				if (strcmp(inet_ntoa(addr), inet_ntop(AF_INET, &cad.sin_addr,straddr, sizeof(straddr))) != 0){
-					printf("this is where i should be\n");
 					closesocket(sd2);
 					sd2 = -1;	
 					continue;
@@ -248,11 +241,21 @@ main(int argc,char *argv[])
 						/* Terminate the piggy gracefully. */
 						exit(0);}
 					else if (strncmp(command,"noleft",command_length) == 0){
-						printf("noleft is set to true\n");
-						no_left = true;}
+						if (sd2 != -1){
+							closesocket(sd2);
+							FD_CLR(sd2,&inputs);
+							sd2 = -1;
+							printf("Dropped the left side connection.\n");} 
+						else
+							printf("No left side connection to drop.\n");}
 					else if (strncmp(command,"noright",command_length) == 0){
-						printf("noright is set to true\n");
-						no_right = true;}
+						if (right_sock != -1){
+							closesocket(right_sock);
+							FD_CLR(right_sock,&inputs);
+							sd2 = -1;
+							printf("Dropped the right side connection.\n");}
+						else
+							 printf("No right side connection to drop.\n");}
 					else if (strncmp(command,"outputl",command_length) == 0){
 						if (outputr = true)
 							outputr = false;
@@ -292,8 +295,8 @@ main(int argc,char *argv[])
 			if ((left_n = read(sd2,left_buf,sizeof(left_buf))) == 0){
 				fprintf(stderr,"Lost connection to left side.\n");
 				closesocket(sd2);
-				sd2 = -1;
 				FD_CLR(sd2, &inputs);
+				sd2 = -1;
 			}
 		}
 		
@@ -302,8 +305,8 @@ main(int argc,char *argv[])
 			if ((right_n = read(right_sock, right_buf,sizeof(right_buf))) == 0){
 				fprintf(stderr,"Lost connection to right side.\n");
 				closesocket(right_sock);
-				right_sock = -1;
 				FD_CLR(right_sock, &inputs);
+				right_sock = -1;
 			}
 		}
 	
@@ -315,13 +318,21 @@ main(int argc,char *argv[])
 	
 		/* check if piggy is in the middle and transfer data according to options */
 		if (!no_right && !no_left){  
-			if (right_sock != -1 && left_n != 0){
+			if (right_sock != -1 && left_n != 0 && !loopr){
 				write(right_sock,left_buf,left_n);
+				if (dsplr)
+					printf("%.*s",left_n,left_buf);}
+			else if (left_n != 0 && sd2 != -1 && loopr){
+				write(sd2,left_buf,left_n);
 				if (dsplr)
 					printf("%.*s",left_n,left_buf);
 			}
-			if (sd2 != -1 && right_n != 0){
+			if (sd2 != -1 && right_n != 0 && !loopl){
 				write(sd2,right_buf,right_n);
+				if (dsprl)
+					printf("%.*s",right_n,right_buf);}
+			else if (right_n != 0 && right_sock != -1 && loopl){
+				write(right_sock,right_buf,right_n);
 				if (dsprl)
 					printf("%.*s",right_n,right_buf);
 			}
