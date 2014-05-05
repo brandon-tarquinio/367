@@ -76,7 +76,7 @@ void wAddnstr(int i, char s[1000],int n){
 }
 
 /*------------------------------------------------------------------------
-* Program: piggy2
+* Program: piggy3
 *
 * Purpose: Network middleware where a client can connect to the left side
 * of piggy and piggy can also connect to a server with an address specified
@@ -283,6 +283,7 @@ main(int argc,char *argv[])
 	wrefresh(w[0]);
 	
 	i = 0;
+	wmove(w[IO],1,1);// start curser in IO window at top left
 	
 	/* Main server loop - accept and handle requests */
 	struct sockaddr_in cad; /* structure to hold client's address */
@@ -294,13 +295,11 @@ main(int argc,char *argv[])
 	int right_n = 0; /* number of characters read to go to output stream*/
 	char stdin_buf[1000]; /* buffer for insert mode */
 	int stdin_n = 0; /* number of characters read in insert mode */
-	bool outputr = false;
+	bool outputr = true;
 	bool outputl = false;	
 	fd_set inputs_loop = inputs;
 	while (1) {
-		wAddstr(5,"\nhello\n");
-		wrefresh(w[0]);	
-	
+		wmove(w[IO],1,1);
 		inputs_loop = inputs;
 		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,&timeout);
 
@@ -311,7 +310,7 @@ main(int argc,char *argv[])
 				wAddstr(IO,"Accept failed on left side. \n");
 			} 
 			
-			/* if -laddr was set then check if connecting IP matches. If not skip request */
+			/* if -laddr was set then check if connecting IP matches. If ot skip request */
 			if (laddr_hostent != NULL) {
 				char straddr[INET_ADDRSTRLEN];
 				char s[INET_ADDRSTRLEN];	
@@ -337,34 +336,65 @@ main(int argc,char *argv[])
 		
 		/* read input from stdin */
 		char cur_char;
-		wclrtoeol(w[IO]);
 		halfdelay(20);	
 		if ( (cur_char = wgetch(w[IO])) != ERR){
-			wmove(w[5],2,i);
-			waddch(w[5],cur_char);
-			i++;	
 			wrefresh(w[5]);
+			int cur_y,cur_x;
+			getyx(w[IO],cur_y,cur_x);
 			/* process input commands */
 			char command[10];
 			int command_length = 0;
 			int command_i;
-			while ((cur_char = wgetch(w[IO])) != '\n' && cur_char != EOF){
+
+			wrpos[IO]=cur_y;
+  			wcpos[IO]=cur_x;
+			
+			do{ 
 				/* Insert Mode */
 				if (cur_char == 'i'){
-					nocbreak();
-					echo();
-					wAddstr(IO,"Now in Insert Mode (press Esc and hit Enter to exit):\n");	
+					/* show that the user has entered insert mode */
+					mvwprintw(w[IO],wh[IO] -1,1,"-- INSERT --");
+					wrpos[IO]=cur_y;
+					wcpos[IO]=cur_x;
+					wmove(w[IO],wrpos[IO],wcpos[IO]);
+					/* parse input */	
 					while ((cur_char = wgetch(w[IO])) != 27){
+						if (cur_char == 127){ // A backspace
+							if (stdin_n != 0){
+								--stdin_n;
+								mvwaddch(w[IO],wrpos[IO],wcpos[IO],' ');
+								wmove(w[IO],wrpos[IO],wcpos[IO]);
+								wcpos[IO]--;
+							}}
+						else if (cur_char == 13){ // An enter
+							stdin_buf[stdin_n++] = '\n';
+							if (++wrpos[IO] == wh[IO] - 1)
+								wrpos[IO] = 1;
+					
+							wcpos[IO] = 1;
+							wmove(w[IO],wrpos[IO],wcpos[IO]);}
+						else if ((cur_char >= 32) && (cur_char != 127)){
+							if (++wcpos[IO] == ww[IO]){
+								wcpos[IO]=1;
+								if (++wrpos[IO]==wh[IO] -1)
+									wrpos[IO]=1;
+							}
+							stdin_buf[stdin_n++] = cur_char;
+							mvwaddch(w[IO],wrpos[IO],wcpos[IO],cur_char);
+						}	
 						wrefresh(w[5]);
-						stdin_buf[stdin_n++] = cur_char;
 					}
+					/* Clean up */
 					stdin_buf[stdin_n] = 0;// make it a proper string	
-					wAddstr(IO,"Leaving Insert Mode\n");
-					cbreak();
-					noecho();
+					for (i = 1; i < wh[IO]; i++){
+						for (j = 1; j < ww[IO]; j++)
+							mvwaddch(w[IO],i,j,' ');
+					}
+					wmove(w[IO],1,1);		
 					break;}	
 				/* Command Mode */	
 				else if (cur_char == ':'){
+					mvwaddch(w[IO],wrpos[IO],wcpos[IO],':');
 					nocbreak();
 					echo();
 					/* Put command into command[]*/
@@ -382,6 +412,7 @@ main(int argc,char *argv[])
 						if (sd2 != -1)
 							closesocket(sd2);	
 						/* Terminate the piggy gracefully. */
+						endwin();
 						exit(0);}
 					else if (strncmp(command,"noleft",command_length) == 0){
 						if (sd2 != -1){
@@ -423,7 +454,7 @@ main(int argc,char *argv[])
 				}
 				else
 					break;
-			}
+			} while ((cur_char = wgetch(w[IO])) != '\n' && cur_char != EOF);
 			__fpurge(stdin);
 		}
 		
@@ -450,10 +481,16 @@ main(int argc,char *argv[])
 		}
 	
 		/* output contents of stdin_buf */
-		if ((no_left || outputr || (!no_left && !no_right)) && !outputl && right_sock != -1 && stdin_n != 0) // write stdin to right_sock
-			write(right_sock,stdin_buf, stdin_n);
-		else if ((no_right || outputl) && sd2 != -1 && stdin_n != 0) // write stdin to left_sock
-			write(sd2,stdin_buf, stdin_n);
+		if (stdin_n !=0){
+			if (outputr && right_sock != -1){
+				write(right_sock,stdin_buf,stdin_n);
+				wAddnstr(OUT_R,stdin_buf,stdin_n);}
+			else if (outputl && sd2 != -1){
+				write(sd2, stdin_buf,stdin_n);
+				wAddnstr(OUT_L,stdin_buf,stdin_n);
+			}
+			stdin_n = 0;
+		}
 	
 		/* Output contents of left and right buffer if data is present */
 		if (left_n != 0){
@@ -463,6 +500,7 @@ main(int argc,char *argv[])
 			else if (loopr && sd2 != -1){
 				write(sd2,left_buf,left_n);
 				wAddnstr(OUT_L,left_buf,left_n);}
+			left_n = 0;
 		}
 		if (right_n != 0){
 			if (!loopl && sd2 != -1){
@@ -471,10 +509,8 @@ main(int argc,char *argv[])
 			else if (loopl && right_sock != -1){
 				write(right_sock,right_buf,right_n);
 				wAddnstr(OUT_R,right_buf,right_n);}
+			right_n = 0;
 		}
-	
-		/*clean up*/
-		left_n = right_n = stdin_n = 0;
 	}
 }
 
