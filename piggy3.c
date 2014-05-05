@@ -29,6 +29,11 @@ static chtype ls,rs,ts,bs,tl,tr,bl,br;
 #define OUT_L 3 // bottom left window
 #define IN_R  4 // bottom right window
 #define IO    5 // bottom window
+#define BACKSPACE 127 
+#define ENTER    13
+
+
+
 /* function that creates, binds, and calls listen on a socket. */
 int create_server(int port);
 
@@ -296,10 +301,14 @@ main(int argc,char *argv[])
 	char stdin_buf[1000]; /* buffer for insert mode */
 	int stdin_n = 0; /* number of characters read in insert mode */
 	bool outputr = true;
-	bool outputl = false;	
+	bool outputl = false;
+	if (!no_right){
+		outputr = false;
+		outputl = true;
+	}
 	fd_set inputs_loop = inputs;
 	while (1) {
-		wmove(w[IO],1,1);
+		wmove(w[IO],wrpos[IO],wcpos[IO]);
 		inputs_loop = inputs;
 		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,&timeout);
 
@@ -359,14 +368,14 @@ main(int argc,char *argv[])
 					wmove(w[IO],wrpos[IO],wcpos[IO]);
 					/* parse input */	
 					while ((cur_char = wgetch(w[IO])) != 27){
-						if (cur_char == 127){ // A backspace
+						if (cur_char == BACKSPACE){ // A backspace
 							if (stdin_n != 0){
 								--stdin_n;
 								mvwaddch(w[IO],wrpos[IO],wcpos[IO],' ');
 								wmove(w[IO],wrpos[IO],wcpos[IO]);
 								wcpos[IO]--;
 							}}
-						else if (cur_char == 13){ // An enter
+						else if (cur_char == ENTER){ // An enter
 							stdin_buf[stdin_n++] = '\n';
 							if (++wrpos[IO] == wh[IO] - 1)
 								wrpos[IO] = 1;
@@ -390,11 +399,12 @@ main(int argc,char *argv[])
 						for (j = 1; j < ww[IO]; j++)
 							mvwaddch(w[IO],i,j,' ');
 					}
-					wmove(w[IO],1,1);		
+					wrpos[IO] = wcpos[IO] = 1;
+					wmove(w[IO],wrpos[IO],wcpos[IO]);		
 					break;}	
 				/* Command Mode */	
 				else if (cur_char == ':'){
-					mvwaddch(w[IO],wrpos[IO],wcpos[IO],':');
+					mvwaddch(w[IO],wh[IO]-1, 1,':');
 					nocbreak();
 					echo();
 					/* Put command into command[]*/
