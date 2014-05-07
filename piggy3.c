@@ -219,7 +219,6 @@ main(int argc,char *argv[])
 	/* Set up for left side of the connection */
 	/* Acts like a server so programs can connect to piggy */
 	int left_sock = -1; /* socket descriptors */
-	int left_port = PROTOPORT; /* protocol port number. Set to default*/
 	struct hostent *laddr_hostent = NULL; /* stores IP address associated with laddr if laddr is set */
 	if (!no_left){
 		/* if laddr is set to non wildcard value */
@@ -229,7 +228,7 @@ main(int argc,char *argv[])
 			char s[INET_ADDRSTRLEN];	
 			laddr_hostent = gethostbyname(laddr);
 			inet_ntop(AF_INET,laddr_hostent->h_addr_list[0],s,sizeof(s));
-			printf("the value of laddr is %s and the value of laddr_hostent is %s",laddr,s);	
+			//wprintw(w[IO],"the value of laddr is %s and the value of laddr_hostent is %s",laddr,s);	
 			if ( ((char *)laddr_hostent) == NULL ) {
 				fprintf(stderr,"invalid host: %s. Defaulting to allowing any address.\n", laddr);
 				laddr_hostent = NULL;
@@ -290,7 +289,7 @@ main(int argc,char *argv[])
 		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,&timeout);
 
 		/* accepts incoming client from left side and assigns to sd2 */	
-		if (!no_left && FD_ISSET(left_sock,&inputs_loop)){	
+		if (left_sock != -1 && FD_ISSET(left_sock,&inputs_loop)){	
 			alen = sizeof(cad);
 			if ( !no_left && (sd2=accept(left_sock, (struct sockaddr *)&cad, &alen)) < 0) {
 				wAddstr(IO,"Accept failed on left side. \n");
@@ -328,8 +327,14 @@ main(int argc,char *argv[])
 			int cur_y,cur_x;
 			getyx(w[IO],cur_y,cur_x);
 			/* process input commands */
-			char command[10];
-			int command_length = 0;
+			char *commands[3];	
+			char command1[20];
+			char command2[20];
+			char command3[20];
+			commands[1] = command1;
+			commands[2] = command2;
+			commands[3] = command3;
+			int command_lengths[3];	
 			int command_i;
 
 			wrpos[IO]=cur_y;
@@ -385,11 +390,20 @@ main(int argc,char *argv[])
 					nocbreak();
 					echo();
 					/* Put command into command[]*/
-					for (command_i = 0;(cur_char = wgetch(w[IO])) != EOF && cur_char != '\n' && cur_char != ' '; command_i++){
-						command[command_i] = cur_char;
-						command_length = command_i;
+					int command_count = 0;
+					for (command_i = 0;(cur_char = wgetch(w[IO])) != EOF && cur_char != '\n' ; command_i++){
+						if (cur_char == ' '){
+							commands[command_count][++command_lengths[command_count]] = 0; // make command i proper
+							if (++command_count > 3){
+								wAddstr(IO,"No valid commands have more then two args.");
+								break;
+							}
+							command_lengths[command_count] = 0;
+						}
+						else	
+							commands[command_count][command_lengths[command_count]++] = cur_char;
 					}
-					command[++command_length]= 0;
+					commands[command_lengths[command_count]] = 0;
 				
 					cbreak();
 					noecho();
@@ -398,7 +412,7 @@ main(int argc,char *argv[])
 					wClrtoeol(IO);
 					wmove(w[IO],1,1);
 					/* Check if valid command and set appropriate flag*/
-					if (strncmp(command,"q",command_length) == 0){
+					if (strncmp(commands[0],"q",command_lengths[0]) == 0){
 						/* Close the sockets. */	
 						closesocket(right_sock);
 						closesocket(left_sock);
@@ -407,40 +421,46 @@ main(int argc,char *argv[])
 						/* Put piggy out to paster */
 						endwin();
 						exit(0);}
-					else if (strncmp(command,"dropl",command_length) == 0){
-						if (sd2 != -1){
-							closesocket(sd2);
-							FD_CLR(sd2,&inputs);
-							sd2 = -1;
+					else if (strncmp(commands[0],"dropl",command_lengths[0]) == 0){
+						if (left_sock != -1){
+							if (sd2 != -1){
+								closesocket(sd2);
+								FD_CLR(sd2,&inputs);
+								sd2 = -1;
+							}
+							closesocket(left_sock);
+							FD_CLR(left_sock,&inputs);
+							left_sock = -1;
 							wAddstr(IO,"Dropped the left side connection.\n");} 
 						else
 							wAddstr(IO,"No left side connection to drop.\n");}
-					else if (strncmp(command,"dropr",command_length) == 0){
+					else if (strncmp(commands[0],"dropr",command_lengths[0]) == 0){
 						if (right_sock != -1){
 							closesocket(right_sock);
 							FD_CLR(right_sock,&inputs);
-							sd2 = -1;
+							right_sock = -1;
 							wAddstr(IO,"Dropped the right side connection.\n");}
 						else
 							wAddstr(IO,"No right side connection to drop.\n");}
-					else if (strncmp(command,"outputl",command_length) == 0){
-						if (outputr = true)
-							outputr = false;
+					else if (strncmp(commands[0],"output",command_lengths[0]) == 0){
+						if (outputr)
+							wAddstr(IO,"The current output direction for insert mode is to the right.\n");
+						else 
+							wAddstr(IO,"The current output direction for insert mode is to the left. \n");}
+					else if (strncmp(commands[0],"outputl",command_lengths[0]) == 0){
+						outputr = false;
 						outputl = true;}
-					else if (strncmp(command,"outputr",command_length) == 0){
-						if (outputl = true)
-							outputr = false;
+					else if (strncmp(commands[0],"outputr",command_lengths[0]) == 0){
+						outputl = false;
 						outputr = true;}	
-					else if (strncmp(command,"loopl",command_length) == 0){
-						if (loopr = true)
-							loopr = false;
+					else if (strncmp(commands[0],"loopl",command_lengths[0]) == 0){
+						loopr = false;
 						loopl = true;}	
-					else if (strncmp(command,"loopr",command_length) == 0){
-						if (loopl = true)
-							loopl = false;
+					else if (strncmp(commands[0],"loopr",command_lengths[0]) == 0){
+						loopl = false;
 						loopr = true;}	
 					else
-						fprintf(stderr,"Not a valid command :%s\n",command);	
+						wprintw(w[IO],"Not a valid command :%s\n",commands[0]);	
 					break;
 				}
 				else
