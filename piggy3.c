@@ -32,7 +32,8 @@ static chtype ls,rs,ts,bs,tl,tr,bl,br;
 #define BACKSPACE 127 
 #define ENTER    13
 
-
+/* delete in w[i] the characters until eol. Doesn't clobber boarders*/
+void wClrtoeol(int i);
 
 /* function that creates, binds, and calls listen on a socket. */
 int create_server(int port);
@@ -41,45 +42,11 @@ int create_server(int port);
 *  host (IP or host name) and port */
 int create_client(char *host, int port);
 
+/* Add string to window specified by i */
+void wAddstr(int i, char s[132]);
 
-
-void wAddstr(int i, char s[132]){
-	int j,l,y,x;
-	getyx(w[i],y,x);      // find out where we are in the window
-  	y=y?y:!y;
-  	x=x?x:!x;  
-  	wrpos[i]=y;
-  	wcpos[i]=x;
-  	l=strlen(s);
-  	for (j=0;j<l;j++){
-      		if (++wcpos[i]==ww[i]) {
-	  		wcpos[i]=1;
-	  		if (++wrpos[i]==wh[i])
-				wrpos[i]=1; 
-		}	
-      		mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]);   
-    	}
-  	wrefresh(w[i]);
-}
-
-void wAddnstr(int i, char s[1000],int n){
-	int j,l,y,x;
-	getyx(w[i],y,x);      // find out where we are in the window
-  	y=y?y:!y;
-  	x=x?x:!x;  
-  	wrpos[i]=y;
-  	wcpos[i]=x;
-  	for (j=0;j<n;j++){
-      		if (++wcpos[i]==ww[i]){
-	  		wcpos[i]=1;
-	  		if (++wrpos[i]==wh[i]) 
-				wrpos[i]=1;
-		}
-      		mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]);   
-    	}
-  	wrefresh(w[i]);
-}
-
+/* Print buffer from 0 to n into the window w[i]*/
+void wAddnstr(int i, char s[1000],int n);
 /*------------------------------------------------------------------------
 * Program: piggy3
 *
@@ -118,14 +85,15 @@ main(int argc,char *argv[])
 	timeout.tv_sec = .5;
 
 	/* loop through arguments and set values */
-	bool no_left = false;  /* holds value of command line argument -noleft */
+	bool no_left  = false; /* holds value of command line argument -noleft */
 	bool no_right = false; /* Holds value of command line argument -no_right */
-	char *laddr = NULL;    /* Holds the address of the left connect as either an IP address or DNS name*/
-	char *raddr = NULL;    /* Holds the address of the left connect as either an IP address or DNS name*/
+	char *laddr   = NULL;  /* Holds the address of the left connect as either an IP address or DNS name*/
+	char *raddr   = NULL;  /* Holds the address of the left connect as either an IP address or DNS name*/
 	int lacctport = 0;     /* Holds the port number will be accepted on the left connection */
-	int luseport = 0;      /* Holds the port number that will be assigned to the left connection server */
-	bool loopr = false;    /* Holds value of command line argument -loopr */
-	bool loopl = false;    /* Holds value of command line argument -loopl */
+	int luseport  = 0;     /* Holds the port number that will be assigned to the left connection server */
+	int rport     = 0;     /* Holds the port number used when making the connection the raddr */
+	bool loopr    = false;    /* Holds value of command line argument -loopr */
+	bool loopl    = false;    /* Holds value of command line argument -loopl */
 	
 	int arg_i;
 	for (arg_i = 1; arg_i < argc; arg_i++){
@@ -141,6 +109,8 @@ main(int argc,char *argv[])
 			lacctport = atoi(argv[++arg_i]);
 		else if (strcmp(argv[arg_i], "-luseport") == 0 && (arg_i + 1) < argc)
 			luseport = atoi(argv[++arg_i]);
+		else if (strcmp(argv[arg_i], "-rport") == 0 && (arg_i + 1) < argc)
+			rport = atoi(argv[++arg_i]);
 		else if (strcmp(argv[arg_i], "-loopr") == 0)
 			loopr = true;
 		else if (strcmp(argv[arg_i], "-loopl") == 0)
@@ -161,55 +131,8 @@ main(int argc,char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	/* Set up for left side of the connection */
-	/* Acts like a server so programs can connect to piggy */
-	int left_sock = -1; /* socket descriptors */
-	int left_port = PROTOPORT; /* protocol port number. Set to default*/
-	struct hostent *laddr_hostent = NULL; /* stores IP address associated with laddr if laddr is set */
-	if (!no_left){
-		/* if laddr is set to non wildcard value */
-		/* Convert laddr to equivalant IP address and save to compare to the address
-	  	 of the incoming client */
-		if (laddr != NULL && strcmp(laddr,"*") != 0){
-			char s[INET_ADDRSTRLEN];	
-			laddr_hostent = gethostbyname(laddr);
-			inet_ntop(AF_INET,laddr_hostent->h_addr_list[0],s,sizeof(s));
-			printf("the value of laddr is %s and the value of laddr_hostent is %s",laddr,s);	
-			if ( ((char *)laddr_hostent) == NULL ) {
-				fprintf(stderr,"invalid host: %s. Defaulting to allowing any address.\n", laddr);
-				laddr_hostent = NULL;
-			}
-		}
-
-		/* If luseport is set then set left_sock to given value */
-		if (luseport != 0)
-			left_port = luseport; 
-		if((left_sock = create_server(left_port)) != -1){	
-			FD_SET(left_sock, &inputs);
-			if (left_sock > max_fd)
-				max_fd = left_sock;}
-		else
-			fprintf(stderr,"An error has occured creating the left connection. Piggy does not have a left side.\n");
-		
-	}
-
-	/* Right side of connection */
-	/* Acts like a client connection to a server */
-	int right_sock = -1; /* socket descriptor for left side*/
-	if (!no_right && raddr != NULL){
-		if ((right_sock = create_client(raddr, PROTOPORT)) != -1){
-			FD_SET(right_sock, &inputs);
-			if (right_sock > max_fd)
-				max_fd = right_sock;}
-		else
-			fprintf(stderr,"An error has occured creating the right connection. Piggy does not have a right side.\n");
-	}
-	else if (!no_right && raddr == NULL){
-		fprintf(stderr,"must specify -raddr or set -noright\n");
-		exit(EXIT_FAILURE);
-	}
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// ncurses
+// Set up ncurses
 /************************************************************************************************************************************/
 
 	int i,j,a,b,c,d,nch; 
@@ -289,6 +212,60 @@ main(int argc,char *argv[])
 	
 	i = 0;
 	wmove(w[IO],1,1);// start curser in IO window at top left
+
+/*****************************************************************************************************************/
+// create initial sockets
+/*****************************************************************************************************************/
+	/* Set up for left side of the connection */
+	/* Acts like a server so programs can connect to piggy */
+	int left_sock = -1; /* socket descriptors */
+	int left_port = PROTOPORT; /* protocol port number. Set to default*/
+	struct hostent *laddr_hostent = NULL; /* stores IP address associated with laddr if laddr is set */
+	if (!no_left){
+		/* if laddr is set to non wildcard value */
+		/* Convert laddr to equivalant IP address and save to compare to the address
+	  	 of the incoming client */
+		if (laddr != NULL && strcmp(laddr,"*") != 0){
+			char s[INET_ADDRSTRLEN];	
+			laddr_hostent = gethostbyname(laddr);
+			inet_ntop(AF_INET,laddr_hostent->h_addr_list[0],s,sizeof(s));
+			printf("the value of laddr is %s and the value of laddr_hostent is %s",laddr,s);	
+			if ( ((char *)laddr_hostent) == NULL ) {
+				fprintf(stderr,"invalid host: %s. Defaulting to allowing any address.\n", laddr);
+				laddr_hostent = NULL;
+			}
+		}
+
+		/* If luseport is not set then use protoport value */
+		if (luseport == 0)
+			luseport = PROTOPORT; 
+		if((left_sock = create_server(luseport)) != -1){	
+			FD_SET(left_sock, &inputs);
+			if (left_sock > max_fd)
+				max_fd = left_sock;}
+		else
+			wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");
+		
+	}
+
+	/* Right side of connection */
+	/* Acts like a client connection to a server */
+	int right_sock = -1; /* socket descriptor for left side*/
+	if (!no_right && raddr != NULL){
+		/* If rport was not set by the command line then use default PROTOPORT */
+		if (rport == 0)
+			rport = PROTOPORT;
+		if ((right_sock = create_client(raddr, rport)) != -1){
+			wAddstr(IO,"Piggy has a valid right connection.\n");
+			FD_SET(right_sock, &inputs);
+			if (right_sock > max_fd)
+				max_fd = right_sock;}
+		else
+			wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");
+	}
+	else if (!no_right && raddr == NULL){
+		wAddstr(IO,"Must specify -raddr or set -noright\n");
+	}
 	
 	/* Main server loop - accept and handle requests */
 	struct sockaddr_in cad; /* structure to hold client's address */
@@ -302,7 +279,7 @@ main(int argc,char *argv[])
 	int stdin_n = 0; /* number of characters read in insert mode */
 	bool outputr = true;
 	bool outputl = false;
-	if (!no_right){
+	if (no_right){
 		outputr = false;
 		outputl = true;
 	}
@@ -327,7 +304,7 @@ main(int argc,char *argv[])
 				memcpy(&addr, laddr_hostent->h_addr_list[0], sizeof(struct in_addr));
 				inet_ntop(AF_INET,laddr_hostent->h_addr_list[0],s,sizeof(s));
 				if (strcmp(inet_ntoa(addr), inet_ntop(AF_INET, &cad.sin_addr,straddr, sizeof(straddr))) != 0){
-					wAddstr(IO,"piggy rejected a left connection.\n");
+					wAddstr(IO,"Piggy rejected a left connection.\n");
 					closesocket(sd2);
 					sd2 = -1;	
 					continue;
@@ -413,7 +390,13 @@ main(int argc,char *argv[])
 						command_length = command_i;
 					}
 					command[++command_length]= 0;
-					
+				
+					cbreak();
+					noecho();
+					wrpos[IO]=wh[IO] -1;
+					wcpos[IO]=1;
+					wClrtoeol(IO);
+					wmove(w[IO],1,1);
 					/* Check if valid command and set appropriate flag*/
 					if (strncmp(command,"q",command_length) == 0){
 						/* Close the sockets. */	
@@ -421,25 +404,25 @@ main(int argc,char *argv[])
 						closesocket(left_sock);
 						if (sd2 != -1)
 							closesocket(sd2);	
-						/* Terminate the piggy gracefully. */
+						/* Put piggy out to paster */
 						endwin();
 						exit(0);}
-					else if (strncmp(command,"noleft",command_length) == 0){
+					else if (strncmp(command,"dropl",command_length) == 0){
 						if (sd2 != -1){
 							closesocket(sd2);
 							FD_CLR(sd2,&inputs);
 							sd2 = -1;
-							printf("Dropped the left side connection.\n");} 
+							wAddstr(IO,"Dropped the left side connection.\n");} 
 						else
-							printf("No left side connection to drop.\n");}
-					else if (strncmp(command,"noright",command_length) == 0){
+							wAddstr(IO,"No left side connection to drop.\n");}
+					else if (strncmp(command,"dropr",command_length) == 0){
 						if (right_sock != -1){
 							closesocket(right_sock);
 							FD_CLR(right_sock,&inputs);
 							sd2 = -1;
-							printf("Dropped the right side connection.\n");}
+							wAddstr(IO,"Dropped the right side connection.\n");}
 						else
-							 printf("No right side connection to drop.\n");}
+							wAddstr(IO,"No right side connection to drop.\n");}
 					else if (strncmp(command,"outputl",command_length) == 0){
 						if (outputr = true)
 							outputr = false;
@@ -458,8 +441,6 @@ main(int argc,char *argv[])
 						loopr = true;}	
 					else
 						fprintf(stderr,"Not a valid command :%s\n",command);	
-					cbreak();
-					noecho();
 					break;
 				}
 				else
@@ -497,8 +478,10 @@ main(int argc,char *argv[])
 				wAddnstr(OUT_R,stdin_buf,stdin_n);}
 			else if (outputl && sd2 != -1){
 				write(sd2, stdin_buf,stdin_n);
-				wAddnstr(OUT_L,stdin_buf,stdin_n);
-			}
+				wAddnstr(OUT_L,stdin_buf,stdin_n);}
+			else
+				wAddstr(1,"Unable to output string. Check your output and loop settings are correct and try again.\n");
+			
 			stdin_n = 0;
 		}
 	
@@ -524,6 +507,66 @@ main(int argc,char *argv[])
 	}
 }
 
+/****************************************************************************************/
+// Functions for curses
+/****************************************************************************************/
+/* clears the current line in w[i]. Doesn't clobber boarders*/
+void wClrtoeol(int i){
+	int row = wrpos[i];
+	int col;
+	for (col = 1; col < ww[i]; col++)
+		mvwaddch(w[i],row,col,' ');
+}
+/* Prints string to window w[i] */
+void wAddstr(int i, char s[132]){
+	int j,l,y,x;
+	getyx(w[i],y,x);      // find out where we are in the window
+  	y=y?y:!y;
+  	x=x?x:!x;  
+  	wrpos[i]=y;
+  	wcpos[i]=x;
+  	l=strlen(s);
+  	for (j=0;j<l;j++){ 
+		if (++wcpos[i]==ww[i] -1) {
+	  		wcpos[i]=1;
+	  		if (++wrpos[i]==wh[i] -1)
+				wrpos[i]=1; 
+		}
+		if (s[j] == '\n'){
+			wrpos[i]++;
+			wcpos[i]= 1;}
+		else	
+      			mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]);   
+    	}
+  	wrefresh(w[i]);
+}
+
+/* Prints from 0 to n of buffer to window w[i]*/ 
+void wAddnstr(int i, char s[1000],int n){
+	int j,l,y,x;
+	getyx(w[i],y,x);      // find out where we are in the window
+  	y=y?y:!y;
+  	x=x?x:!x;  
+  	wrpos[i]=y;
+  	wcpos[i]=x;
+  	for (j=0;j<n;j++){
+      		if (++wcpos[i]==ww[i] -1){
+	  		wcpos[i]=1;
+	  		if (++wrpos[i]==wh[i] -1) 
+				wrpos[i]=1;
+		}
+		if (s[j] == '\n'){
+			wrpos[i]++;
+			wcpos[i]=1;}
+		else	
+      			mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]); 
+    	}
+  	wrefresh(w[i]);
+}
+
+/******************************************************************************************/
+// Functions for networking.
+/******************************************************************************************/
 
 /* function that creates, binds, and calls listen on a socket. */
 /* Returns socket_id of created socket or -1 if a failure occured */
@@ -546,25 +589,25 @@ int create_server(int port){
 	/* Create a socket */
 	server_sock = socket(PF_INET, SOCK_STREAM, ptrp->p_proto);
 	if (server_sock < 0) {
-		fprintf(stderr, "Socket creation failed.\n");
+		wAddstr(IO,"Socket creation failed.\n");
 		return(-1);
 	}
 
 	/* Eliminate "Address already in use" eroor message. */
 	int flag = 1;
 	if (setsockopt(server_sock, SOL_SOCKET,SO_REUSEADDR, &flag, sizeof(flag)) == -1) {
-		perror("Setsockopt to SO_REUSEADDR failed.");
+		wAddstr(IO,"Setsockopt to SO_REUSEADDR failed.\n");
 	}
 
 	/* Bind address and port in left_sad to left_sock. */
 	if (bind(server_sock, (struct sockaddr *)&server_sad, sizeof(server_sad)) < 0) {
-		fprintf(stderr,"Bind failed.\n");
+		wAddstr(IO,"Bind failed.\n");
 		return(-1);
 	}
 
 	/* Specify size of request queue */
 	if (listen(server_sock, QLEN) < 0) {
-		fprintf(stderr,"Listen failed.\n");
+		wAddstr(IO,"Listen failed.\n");
 		return(-1);
 	}
 
@@ -602,13 +645,13 @@ int create_client(char *host, int port){
 	/* Create a socket. */
 	client_sock = socket(PF_INET, SOCK_STREAM, ptrp->p_proto);
 	if (client_sock < 0) {
-		fprintf(stderr, "Socket creation failed.\n");
+		wAddstr(IO,"Socket creation failed.\n");
 		return(-1);
 	}
 
 	/* Connect the socket to the specified server. */
 	if (connect(client_sock, (struct sockaddr *)&client_sad, sizeof(client_sad)) < 0) {
-		fprintf(stderr,"Connect failed.\n");
+		wAddstr(IO,"Connect failed.\n");
 		return(-1);
 	}
 
