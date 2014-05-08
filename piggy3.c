@@ -15,6 +15,9 @@
 extern int errno;
 char localhost[] = "localhost"; /* default host name */
 struct protoent *ptrp; /* pointer to a protocol table entry */
+/* For select */
+int max_fd;
+fd_set inputs; /* set of selector to be passed to select */
 
 /* Data structures for ncurses. */
 #define MAXWIN 6
@@ -35,22 +38,25 @@ static chtype ls,rs,ts,bs,tl,tr,bl,br;
 /* delete in w[i] the characters until eol. Doesn't clobber boarders*/
 void wClrtoeol(int i);
 
-/* function that creates, binds, and calls listen on a socket. */
-int create_server(int port);
-
-/* Returns a socket descriptor of a socket connected to given
-*  host (IP or host name) and port */
-int create_client(char *host, int port);
-
 /* Add string to window specified by i */
 void wAddstr(int i, char s[132]);
 
 /* Print buffer from 0 to n into the window w[i]*/
 void wAddnstr(int i, char s[1000],int n);
 
+/* Returns the source_ip:source_port:destination_IP:destination_port of given piggy side */
+void tcp_info(int passive_sock,int sock);
+
 /* Wrapper for accept that checks the accepted connection is from the valid ip and port.
 *  Then adds it to the set of file descriptors and returns the socket */
 int Accept(int sock_in,char* lacct_addr,int lacct_port);
+
+/* function that creates, binds, and calls listen on a socket. */
+int create_server(int port);
+
+/* Returns a socket descriptor of a socket connected to given
+*  host (IP or host name) and port */
+int create_client(char *host, int port);
 
 /* Check that string contains a numeric value */
 int is_numeric(char *s){
@@ -90,11 +96,6 @@ int is_numeric(char *s){
 * The default port is 36790
 *------------------------------------------------------------------------
 */
-
-int max_fd;
-fd_set inputs; /* set of selector to be passed to select */
-
-
 main(int argc,char *argv[])
 {
 	/* setup for select */
@@ -226,10 +227,8 @@ main(int argc,char *argv[])
 	wAddstr(OUT_R,"Data leaving from left to right:\n");
 	wAddstr(OUT_L,"Data leaving from right to left:\n");
 	wAddstr(IN_R,"Data arriving from the right:\n");
-	wrefresh(w[0]);
-	
-	i = 0;
 	wmove(w[IO],1,1);// start curser in IO window at top left
+	wrefresh(w[0]);
 
 /*****************************************************************************************************************/
 // create initial sockets
@@ -446,6 +445,10 @@ main(int argc,char *argv[])
 				else if (strncmp(commands[0],"outputr",command_lengths[0]) == 0){
 					outputl = false;
 					outputr = true;}	
+				else if (strncmp(commands[0], "lpair", command_lengths[0]) == 0)
+						tcp_info(left_passive_sock,left_sock);
+				else if (strncmp(commands[0], "rpair", command_lengths[0]) == 0)
+						tcp_info(right_passive_sock,right_sock);
 				else if (strncmp(commands[0],"loopl",command_lengths[0]) == 0){
 					loopr = false;
 					loopl = true;}	
@@ -685,6 +688,11 @@ void wAddnstr(int i, char s[1000],int n){
 // Functions for networking.
 /******************************************************************************************/
 
+/* Return the tcp pair in the form source_IP:Source_port:destination_IP:destination_Port */
+void tcp_info(int passive_sock, int sock){
+
+}
+
 /* Wrapper for accept that checks the accepted connection is from the valid ip and port.
 *  Then adds it to the set of file descriptors and returns the socket */
 int Accept(int sock_in,char* acct_addr,int acct_port){
@@ -709,7 +717,7 @@ int Accept(int sock_in,char* acct_addr,int acct_port){
 			wprintw(w[IO],"invalid host: %s. Defaulting to allowing any address.\n", acct_addr);
 	}
 	
-	/* if -lacct_addr was set then check if connecting IP matches. If ot skip request */
+	/* if -lacct_addr was set then check if connecting IP matches. If not skip request */
 	if (addr_hostent != NULL) {
 		char straddr[INET_ADDRSTRLEN];
 		if (strcmp(s, inet_ntop(AF_INET, &cad.sin_addr,straddr, sizeof(straddr))) != 0){
@@ -718,7 +726,15 @@ int Accept(int sock_in,char* acct_addr,int acct_port){
 			return -1;	
 		}
 	}
-		
+	/* if acct_port was set then check accepted socket is from that port */
+	if (acct_port != -1){
+		if (acct_port != ntohs(cad.sin_port)){
+			wAddstr(IO,"Piggy rejected a connection.\n");
+			closesocket(return_sock);
+			return -1;	
+		}	
+	}
+	
 	/* add left_sock to inputs and return*/
 	if (return_sock > 0){
 		FD_SET(return_sock,&inputs);
