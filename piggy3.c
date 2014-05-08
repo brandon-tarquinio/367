@@ -47,6 +47,16 @@ void wAddstr(int i, char s[132]);
 
 /* Print buffer from 0 to n into the window w[i]*/
 void wAddnstr(int i, char s[1000],int n);
+
+/* Check that string contains a numeric value */
+int is_numeric(char *s){
+	while (*s){
+		if (!(*s >= '0' || *(s++) <= '9'))
+			return 0;
+	}
+	return 1;
+}
+
 /*------------------------------------------------------------------------
 * Program: piggy3
 *
@@ -276,6 +286,17 @@ main(int argc,char *argv[])
 	int right_n = 0; /* number of characters read to go to output stream*/
 	char stdin_buf[1000]; /* buffer for insert mode */
 	int stdin_n = 0; /* number of characters read in insert mode */
+	char *commands[3];	
+	char command1[10];
+	char command2[20];
+	char command3[20];
+	commands[0] = command1;
+	commands[1] = command2;
+	commands[2] = command3;
+	int command_lengths[3];
+	int command_i;
+	int command_count;
+		
 	bool outputr = true;
 	bool outputl = false;
 	if (no_right){
@@ -326,147 +347,148 @@ main(int argc,char *argv[])
 			wrefresh(w[5]);
 			int cur_y,cur_x;
 			getyx(w[IO],cur_y,cur_x);
-			/* process input commands */
-			char *commands[3];	
-			char command1[20];
-			char command2[20];
-			char command3[20];
-			commands[1] = command1;
-			commands[2] = command2;
-			commands[3] = command3;
-			int command_lengths[3];	
-			int command_i;
-
 			wrpos[IO]=cur_y;
   			wcpos[IO]=cur_x;
-			
-			do{ 
-				/* Insert Mode */
-				if (cur_char == 'i'){
-					/* show that the user has entered insert mode */
-					mvwprintw(w[IO],wh[IO] -1,1,"-- INSERT --");
-					wrpos[IO]=cur_y;
-					wcpos[IO]=cur_x;
-					wmove(w[IO],wrpos[IO],wcpos[IO]);
-					/* parse input */	
-					while ((cur_char = wgetch(w[IO])) != 27){
-						if (cur_char == BACKSPACE){ // A backspace
-							if (stdin_n != 0){
-								--stdin_n;
-								mvwaddch(w[IO],wrpos[IO],wcpos[IO],' ');
-								wmove(w[IO],wrpos[IO],wcpos[IO]);
-								wcpos[IO]--;
-							}}
-						else if (cur_char == ENTER){ // An enter
-							stdin_buf[stdin_n++] = '\n';
-							if (++wrpos[IO] == wh[IO] - 1)
-								wrpos[IO] = 1;
-					
-							wcpos[IO] = 1;
-							wmove(w[IO],wrpos[IO],wcpos[IO]);}
-						else if ((cur_char >= 32) && (cur_char != 127)){
-							if (++wcpos[IO] == ww[IO]){
-								wcpos[IO]=1;
-								if (++wrpos[IO]==wh[IO] -1)
-									wrpos[IO]=1;
-							}
-							stdin_buf[stdin_n++] = cur_char;
-							mvwaddch(w[IO],wrpos[IO],wcpos[IO],cur_char);
-						}	
-						wrefresh(w[5]);
-					}
-					/* Clean up */
-					stdin_buf[stdin_n] = 0;// make it a proper string	
-					for (i = 1; i < wh[IO]; i++){
-						for (j = 1; j < ww[IO]; j++)
-							mvwaddch(w[IO],i,j,' ');
-					}
-					wrpos[IO] = wcpos[IO] = 1;
-					wmove(w[IO],wrpos[IO],wcpos[IO]);		
-					break;}	
-				/* Command Mode */	
-				else if (cur_char == ':'){
-					mvwaddch(w[IO],wh[IO]-1, 1,':');
-					nocbreak();
-					echo();
-					/* Put command into command[]*/
-					int command_count = 0;
-					for (command_i = 0;(cur_char = wgetch(w[IO])) != EOF && cur_char != '\n' ; command_i++){
-						if (cur_char == ' '){
-							commands[command_count][++command_lengths[command_count]] = 0; // make command i proper
-							if (++command_count > 3){
-								wAddstr(IO,"No valid commands have more then two args.");
-								break;
-							}
-							command_lengths[command_count] = 0;
-						}
-						else	
-							commands[command_count][command_lengths[command_count]++] = cur_char;
-					}
-					commands[command_lengths[command_count]] = 0;
+
+			/* Process input commands */
+			/* Insert Mode */
+			if (cur_char == 'i'){
+				/* show that the user has entered insert mode */
+				mvwprintw(w[IO],wh[IO] -1,1,"-- INSERT --");
+				wrpos[IO]=cur_y;
+				wcpos[IO]=cur_x;
+				wmove(w[IO],wrpos[IO],wcpos[IO]);
+				/* parse input */	
+				while ((cur_char = wgetch(w[IO])) != 27){
+					if (cur_char == BACKSPACE){ // A backspace
+						if (stdin_n != 0){
+							--stdin_n;
+							mvwaddch(w[IO],wrpos[IO],wcpos[IO],' ');
+							wmove(w[IO],wrpos[IO],wcpos[IO]);
+							wcpos[IO]--;
+						}}
+					else if (cur_char == ENTER){ // An enter
+						stdin_buf[stdin_n++] = '\n';
+						if (++wrpos[IO] == wh[IO] - 1)
+							wrpos[IO] = 1;
 				
-					cbreak();
-					noecho();
-					wrpos[IO]=wh[IO] -1;
-					wcpos[IO]=1;
-					wClrtoeol(IO);
-					wmove(w[IO],1,1);
-					/* Check if valid command and set appropriate flag*/
-					if (strncmp(commands[0],"q",command_lengths[0]) == 0){
-						/* Close the sockets. */	
-						closesocket(right_sock);
-						closesocket(left_sock);
-						if (sd2 != -1)
-							closesocket(sd2);	
-						/* Put piggy out to paster */
-						endwin();
-						exit(0);}
-					else if (strncmp(commands[0],"dropl",command_lengths[0]) == 0){
-						if (left_sock != -1){
-							if (sd2 != -1){
-								closesocket(sd2);
-								FD_CLR(sd2,&inputs);
-								sd2 = -1;
-							}
-							closesocket(left_sock);
-							FD_CLR(left_sock,&inputs);
-							left_sock = -1;
-							wAddstr(IO,"Dropped the left side connection.\n");} 
-						else
-							wAddstr(IO,"No left side connection to drop.\n");}
-					else if (strncmp(commands[0],"dropr",command_lengths[0]) == 0){
-						if (right_sock != -1){
-							closesocket(right_sock);
-							FD_CLR(right_sock,&inputs);
-							right_sock = -1;
-							wAddstr(IO,"Dropped the right side connection.\n");}
-						else
-							wAddstr(IO,"No right side connection to drop.\n");}
-					else if (strncmp(commands[0],"output",command_lengths[0]) == 0){
-						if (outputr)
-							wAddstr(IO,"The current output direction for insert mode is to the right.\n");
-						else 
-							wAddstr(IO,"The current output direction for insert mode is to the left. \n");}
-					else if (strncmp(commands[0],"outputl",command_lengths[0]) == 0){
-						outputr = false;
-						outputl = true;}
-					else if (strncmp(commands[0],"outputr",command_lengths[0]) == 0){
-						outputl = false;
-						outputr = true;}	
-					else if (strncmp(commands[0],"loopl",command_lengths[0]) == 0){
-						loopr = false;
-						loopl = true;}	
-					else if (strncmp(commands[0],"loopr",command_lengths[0]) == 0){
-						loopl = false;
-						loopr = true;}	
-					else
-						wprintw(w[IO],"Not a valid command :%s\n",commands[0]);	
-					break;
+						wcpos[IO] = 1;
+						wmove(w[IO],wrpos[IO],wcpos[IO]);}
+					else if ((cur_char >= 32) && (cur_char != 127)){
+						if (++wcpos[IO] == ww[IO]){
+							wcpos[IO]=1;
+							if (++wrpos[IO]==wh[IO] -1)
+								wrpos[IO]=1;
+						}
+						stdin_buf[stdin_n++] = cur_char;
+						mvwaddch(w[IO],wrpos[IO],wcpos[IO],cur_char);
+					}	
+					wrefresh(w[5]);
 				}
+				/* Clean up */
+				stdin_buf[stdin_n] = 0;// make it a proper string	
+				for (i = 1; i < wh[IO]; i++){
+					for (j = 1; j < ww[IO]; j++)
+						mvwaddch(w[IO],i,j,' ');
+				}
+				wrpos[IO] = wcpos[IO] = 1;
+				wmove(w[IO],wrpos[IO],wcpos[IO]);		
+			}	
+			/* Command Mode */	
+			else if (cur_char == ':'){
+				mvwaddch(w[IO],wh[IO]-1, 1,':');
+				nocbreak();
+				echo();
+				/* Put command into commands[]*/
+				command_count = 0;
+				command_lengths[command_count] = 0;
+				while ((cur_char = wgetch(w[IO])) != EOF && cur_char != '\n'){
+					if (cur_char == ' '){
+						commands[command_count][command_lengths[command_count]] = 0; // make command i proper
+						if (++command_count > 2){
+							wAddstr(IO,"No valid commands have more than two args.");
+							break;
+						}
+						command_lengths[command_count] = 0;
+					}
+					else	
+						commands[command_count][command_lengths[command_count]++] = cur_char;
+				}
+				if (command_lengths[command_count])
+					commands[command_lengths[command_count]] = 0;	
+				cbreak();
+				noecho();
+				wrpos[IO]=wh[IO] -1;
+				wcpos[IO]=1;
+				wClrtoeol(IO);
+				wmove(w[IO],1,1);
+				/* Check if valid command and process it*/
+				if (strncmp(commands[0],"q",command_lengths[0]) == 0){
+					/* Close the sockets. */	
+					closesocket(right_sock);
+					closesocket(left_sock);
+					if (sd2 != -1)
+						closesocket(sd2);	
+					/* Put piggy out to paster */
+					endwin();
+					exit(0);}
+				else if (strncmp(commands[0],"dropl",command_lengths[0]) == 0){
+					if (left_sock != -1){
+						if (sd2 != -1){
+							closesocket(sd2);
+							FD_CLR(sd2,&inputs);
+							sd2 = -1;
+						}
+						closesocket(left_sock);
+						FD_CLR(left_sock,&inputs);
+						left_sock = -1;
+						wAddstr(IO,"Dropped the left side connection.\n");} 
+					else
+						wAddstr(IO,"No left side connection to drop.\n");}
+				else if (strncmp(commands[0],"dropr",command_lengths[0]) == 0){
+					if (right_sock != -1){
+						closesocket(right_sock);
+						FD_CLR(right_sock,&inputs);
+						right_sock = -1;
+						wAddstr(IO,"Dropped the right side connection.\n");}
+					else
+						wAddstr(IO,"No right side connection to drop.\n");}
+				else if (strncmp(commands[0],"output",command_lengths[0]) == 0){
+					if (outputr)
+						wAddstr(IO,"The current output direction for insert mode is to the right.\n");
+					else 
+						wAddstr(IO,"The current output direction for insert mode is to the left. \n");}
+				else if (strncmp(commands[0],"outputl",command_lengths[0]) == 0){
+					outputr = false;
+					outputl = true;}
+				else if (strncmp(commands[0],"outputr",command_lengths[0]) == 0){
+					outputl = false;
+					outputr = true;}	
+				else if (strncmp(commands[0],"loopl",command_lengths[0]) == 0){
+					loopr = false;
+					loopl = true;}	
+				else if (strncmp(commands[0],"loopr",command_lengths[0]) == 0){
+					loopl = false;
+					loopr = true;}	
+				else if (strncmp(commands[0],"luseport",command_lengths[0]) == 0){
+					if (command_lengths[1] > 0)
+						luseport = atoi(commands[1]);
+					else
+						wAddstr(IO,"Must specify valid port number after :luseport\n");}
+				else if (strncmp(commands[0],"lacctport",command_lengths[0]) == 0){
+					if (command_lengths[1] > 0)
+						lacctport = atoi(commands[1]);
+					else
+						wAddstr(IO,"Must specify valid port number after :lacctport\n");}
+				else if (strncmp(commands[0],"laccptip", command_lengths[0]) == 0){
+					if (command_lengths[1] > 0)
+						laddr = commands[1];
+					else
+						wAddstr(IO,"Must specify valid IP number after :lacctip\n");}
+				
 				else
-					break;
-			} while ((cur_char = wgetch(w[IO])) != '\n' && cur_char != EOF);
-			__fpurge(stdin);
+					wprintw(w[IO],"Not a valid command :%s\n",commands[0]);	
+			}
 		}
 		
 		/* read from left side. */	
@@ -500,7 +522,7 @@ main(int argc,char *argv[])
 				write(sd2, stdin_buf,stdin_n);
 				wAddnstr(OUT_L,stdin_buf,stdin_n);}
 			else
-				wAddstr(1,"Unable to output string. Check your output and loop settings are correct and try again.\n");
+				wAddstr(IO,"Unable to output string. Check your output and loop settings are correct and try again.\n");
 			
 			stdin_n = 0;
 		}
