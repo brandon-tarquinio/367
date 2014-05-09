@@ -513,9 +513,6 @@ main(int argc,char *argv[])
 						wAddstr(IO,"Already a right side. Use dropr and try agian.\n");
 					else { 
 						/* If port specified use it. else use protoport value */
-						wAddnstr(IO,commands[1],command_lengths[1]);
-						wrefresh(w[IO]);
-
 						if (command_lengths[1] > 0)
 							ruseport = atoi(commands[1]);
 						if((right_passive_sock = create_server(ruseport)) != -1){	
