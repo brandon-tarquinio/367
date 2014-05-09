@@ -47,8 +47,11 @@ void wAddstr(int i, char s[132]);
 /* Print buffer from 0 to n into the window w[i]*/
 void wAddnstr(int i, char s[1000],int n);
 
-/* Returns the source_ip:source_port:destination_IP:destination_port of given piggy side */
-void tcp_info(int passive_sock,int sock);
+/* Returns a str in the form peer_IP:peer_port */
+char *peer_info(int sock);
+
+/* Returns a str in the form my_IP:my_port */
+char *my_info(int sock, int port);
 
 /* Wrapper for accept that checks the accepted connection is from the valid ip and port.
 *  Then adds it to the set of file descriptors and returns the socket */
@@ -454,10 +457,48 @@ main(int argc,char *argv[])
 				else if (strncmp(commands[0],"outputr",command_lengths[0]) == 0){
 					outputl = false;
 					outputr = true;}	
-				else if (strncmp(commands[0], "lpair", command_lengths[0]) == 0)
-						tcp_info(left_passive_sock,left_sock);
-				else if (strncmp(commands[0], "rpair", command_lengths[0]) == 0)
-						tcp_info(right_passive_sock,right_sock);
+				else if (strncmp(commands[0], "lpair", command_lengths[0]) == 0){
+						char return_str[46];
+						/* left side is currently passive */
+						if (left_passive_sock != -1){ 
+							/*if left side has accepted a connection */ 
+							if (left_sock != -1)
+								strcat(return_str,peer_info(left_sock));
+							else
+								strcat(return_str,"-:-");
+							strcat(return_str,":");	
+							strcat(return_str,my_info(left_passive_sock,luseport));
+							strcat(return_str, "\n");}
+						/* left side is active connection */
+						else if (left_sock != -1){
+							strcat(return_str,my_info(left_sock,luseport));
+							strcat(return_str,":");	
+							strcat(return_str,peer_info(left_sock));
+							strcat(return_str,"\n");}
+						else
+							strcat(return_str,"-:-:-:-\n");
+						wAddstr(IO,return_str);}
+				else if (strncmp(commands[0], "rpair", command_lengths[0]) == 0){
+						char return_str[46];
+						/* left side is currently passive */
+						if (right_passive_sock != -1){ 
+							/*if left side has accepted a connection */ 
+							if (right_sock != -1)
+								strcat(return_str,peer_info(right_sock));
+							else
+								strcat(return_str,"-:-");	
+							strcat(return_str,":");
+							strcat(return_str,my_info(right_passive_sock,ruseport));
+							strcat(return_str, "\n");}
+						/* left side is active connection */
+						else if (right_sock != -1){
+							strcat(return_str,my_info(right_sock,ruseport));
+							strcat(return_str,":");
+							strcat(return_str,peer_info(right_sock));
+							strcat(return_str,"\n");}
+						else
+							strcat(return_str,"-:-:-:-\n");
+						wAddstr(IO,return_str);}
 				else if (strncmp(commands[0],"loopl",command_lengths[0]) == 0){
 					loopr = false;
 					loopl = true;}	
@@ -716,26 +757,51 @@ void wAddnstr(int i, char s[1000],int n){
 // Functions for networking.
 /******************************************************************************************/
 
-/* Return the tcp pair in the form source_IP:Source_port:destination_IP:destination_Port */
-void tcp_info(int passive_sock, int sock){
+/* Returns a str in the form peer_IP:peer_port */
+char *peer_info(int sock){
 	struct sockaddr_in peeraddr;
 	socklen_t peeraddr_len = sizeof(peeraddr);
 	char straddr[INET_ADDRSTRLEN];
-	char *peeraddr_str;
+	//char *peeraddr_str;
 	char peerport_str[6];
-	if (sock != -1)
+	static char return_str[23];	
+	if (sock != -1){
 		getpeername(sock,(struct sockaddr*)&peeraddr,&peeraddr_len);
-	else if (passive_sock != -1)
-		getpeername(sock,(struct sockaddr*)&peeraddr,&peeraddr_len);
-	else {
-		wAddstr(IO,"-:-:-:-\n");
-		return;
-	}	
-	inet_ntop(AF_INET, &peeraddr.sin_addr,straddr, sizeof(straddr));	
-	sprintf(peerport_str,"%d",ntohs(peeraddr.sin_port));
-		
-}
+		inet_ntop(AF_INET, &peeraddr.sin_addr,straddr, sizeof(straddr));	
+		sprintf(peerport_str,"%d",ntohs(peeraddr.sin_port));
+		strcat(return_str,straddr);
+		strcat(return_str,":");
+		strcat(return_str,peerport_str);
+		return (char*)&return_str;}
+	else 
+		return "-:-";
+}		
 
+/* Returns a str in the form my_IP:my_port */
+char *my_info(int sock,int port){
+	struct sockaddr_in myaddr;
+	socklen_t my_addr_len = sizeof(myaddr);
+	char straddr[INET_ADDRSTRLEN];
+	char myport_str[6];
+	static char return_str[23];
+	char localhost[32];
+	if (sock != -1){
+		// get local address	
+		gethostname(localhost,sizeof(localhost));
+		struct hostent *h_hostent = gethostbyname(localhost);
+		inet_ntop(AF_INET,h_hostent->h_addr_list[0],straddr,sizeof(straddr));
+		strcat(return_str,straddr);
+		// get local port used
+		if (port > 0)	
+			sprintf(myport_str,"%d",port);
+               	else
+			sprintf(myport_str,"-"); 
+                strcat(return_str,":");
+                strcat(return_str,myport_str);
+		return (char*)&return_str;}
+	else
+		return "-:-";
+}
 /* Wrapper for accept that checks the accepted connection is from the valid ip and port.
 *  Then adds it to the set of file descriptors and returns the socket */
 int Accept(int sock_in,char* acct_addr,int acct_port){
