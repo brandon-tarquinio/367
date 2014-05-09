@@ -124,6 +124,20 @@ main(int argc,char *argv[])
 	int left_port = PROTOPORT; /* protocol port number. Set to default*/
 	struct hostent *laddr_hostent = NULL; /* stores IP address associated with laddr if laddr is set */
 	if (!no_left){
+		/* if laddr is set to non wildcard value */
+		/* Convert laddr to equivalant IP address and save to compare to the address
+	  	 of the incoming client */
+		if (laddr != NULL && strcmp(laddr,"*") != 0){
+			char s[INET_ADDRSTRLEN];	
+			laddr_hostent = gethostbyname(laddr);
+			inet_ntop(AF_INET,laddr_hostent->h_addr_list[0],s,sizeof(s));
+			printf("the value of laddr is %s and the value of laddr_hostent is %s",laddr,s);	
+			if ( ((char *)laddr_hostent) == NULL ) {
+				fprintf(stderr,"invalid host: %s. Defaulting to allowing any address.\n", laddr);
+				laddr_hostent = NULL;
+			}
+		}
+
 		/* If luseport is set then set left_sock to given value */
 		if (luseport != 0)
 			left_port = luseport; 
@@ -133,17 +147,7 @@ main(int argc,char *argv[])
 				max_fd = left_sock;}
 		else
 			fprintf(stderr,"An error has occured creating the left connection. Piggy does not have a left side.\n");
-
-		/* if laddr is set to non wildcard value */
-		/* Convert laddr to equivalant IP address and save to compare to the address
-	  	 of the incoming client */
-		if (laddr != NULL && strcmp(laddr,"*") != 0){
-			laddr_hostent = gethostbyname(laddr);
-			if ( ((char *)laddr_hostent) == NULL ) {
-				fprintf(stderr,"invalid host: %s. Defaulting to allowing any address.\n", laddr);
-				laddr_hostent = NULL;
-			}
-		}
+		
 	}
 
 	/* Right side of connection */
@@ -188,10 +192,14 @@ main(int argc,char *argv[])
 			
 			/* if -laddr was set then check if connecting IP matches. If not skip request */
 			if (laddr_hostent != NULL) {
-				char straddr[INET_ADDRSTRLEN];	
+				char straddr[INET_ADDRSTRLEN];
+				char s[INET_ADDRSTRLEN];	
 				struct in_addr addr;
 				memcpy(&addr, laddr_hostent->h_addr_list[0], sizeof(struct in_addr));
+				inet_ntop(AF_INET,laddr_hostent->h_addr_list[0],s,sizeof(s));
+				printf("the value of laddr is %s and the value of laddr_hostent is %s",laddr,s);
 				if (strcmp(inet_ntoa(addr), inet_ntop(AF_INET, &cad.sin_addr,straddr, sizeof(straddr))) != 0){
+					printf("piggy rejected a left connection.\n");
 					closesocket(sd2);
 					sd2 = -1;	
 					continue;
