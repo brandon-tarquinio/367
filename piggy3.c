@@ -403,7 +403,7 @@ main(int argc,char *argv[])
 
 				wrpos[IO] = wh[IO] -1;
 				wcpos[IO] = 1;
-				//wClrtoeol(IO);
+				wClrtoeol(IO);
 				wrpos[IO] = 1;
 				wcpos[IO] =1;
 				wmove(w[IO],wrpos[IO],wcpos[IO]);	
@@ -663,6 +663,8 @@ void wClrtoeol(int i){
 	int col;
 	for (col = 1; col < ww[i]; col++)
 		mvwaddch(w[i],row,col,' ');
+	/* move cursor back to where it started */
+	wmove(w[i],wrpos[i],wcpos[i]);
 }
 /* Prints string to window w[i] */
 void wAddstr(int i, char s[132]){
@@ -675,18 +677,13 @@ void wAddstr(int i, char s[132]){
   	l=strlen(s);
 	wClrtoeol(i);
   	for (j=0;j<l;j++){ 
-		if (++wcpos[i]==ww[i] -1) {
+		if (++wcpos[i]==ww[i] -1 || s[j] == '\n') {
 	  		wcpos[i]=1;
 	  		if (++wrpos[i]==wh[i] -1){
 				wrpos[i]=1;
-				//wClrtoeol(i);
+				wClrtoeol(i);
 			}
 		}
-		if (s[j] == '\n'){
-			wrpos[i]++;
-			wcpos[i]= 1;
-			//wClrtoeol(i);
-			}
 		else	
       			mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]);   
     	}
@@ -702,16 +699,15 @@ void wAddnstr(int i, char s[1000],int n){
   	wrpos[i]=y;
   	wcpos[i]=x;
   	for (j=0;j<n;j++){
-      		if (++wcpos[i]==ww[i] -1){
+      		if (++wcpos[i]==ww[i] -1 || s[j] == '\n') {
 	  		wcpos[i]=1;
-	  		if (++wrpos[i]==wh[i] -1) 
+	  		if (++wrpos[i]==wh[i] -1){
 				wrpos[i]=1;
+				wClrtoeol(i);
+			}
 		}
-		if (s[j] == '\n'){
-			wrpos[i]++;
-			wcpos[i]=1;}
 		else	
-      			mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]); 
+      			mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]);  
     	}
   	wrefresh(w[i]);
 }
