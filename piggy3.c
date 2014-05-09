@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <locale.h>
 #include <curses.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+
 #define PROTOPORT 36790 /* default protocol port number */
 #define QLEN 6 /* size of request queue */
 extern int errno;
@@ -108,9 +111,9 @@ main(int argc,char *argv[])
 	bool no_right	= false;/* Holds value of command line argument -no_right */
 	char *lacct_addr = NULL;/* Holds the address of the left connect as either an IP address or DNS name*/
 	char *raddr   = NULL; 	/* Holds the address of the left connect as either an IP address or DNS name*/
-	int lacctport = 0;     	/* Holds the port number will be accepted on the left connection */
-	int luseport  = 0;     	/* Holds the port number that will be assigned to the left connection server */
-	int rport     = 0;     	/* Holds the port number used when making the connection the raddr */
+	int lacctport = -1;     	/* Holds the port number will be accepted on the left connection */
+	int luseport  = -1;     	/* Holds the port number that will be assigned to the left connection server */
+	int rport     = -1;     	/* Holds the port number used when making the connection the raddr */
 	bool loopr    = false;  /* Holds value of command line argument -loopr */
 	bool loopl    = false;  /* Holds value of command line argument -loopl */
 	
@@ -236,10 +239,10 @@ main(int argc,char *argv[])
 	/* Set up for left side of the connection */
 	/* Acts like a server so programs can connect to piggy */
 	int left_passive_sock = -1; /* socket descriptors */
+	/* If luseport is not set then use protoport value */
+	if (luseport == -1)
+		luseport = PROTOPORT; 
 	if (!no_left){
-		/* If luseport is not set then use protoport value */
-		if (luseport == 0)
-			luseport = PROTOPORT; 
 		if((left_passive_sock = create_server(luseport)) != -1){	
 			FD_SET(left_passive_sock, &inputs);
 			if (left_passive_sock > max_fd)
@@ -254,7 +257,7 @@ main(int argc,char *argv[])
 	int right_sock = -1; /* socket descriptor for left side*/
 	if (!no_right && raddr != NULL){
 		/* If rport was not set by the command line then use default PROTOPORT */
-		if (rport == 0)
+		if (rport == -1)
 			rport = PROTOPORT;
 		if ((right_sock = create_client(raddr, rport)) != -1){
 			wAddstr(IO,"Piggy has a valid right connection.\n");
@@ -276,7 +279,7 @@ main(int argc,char *argv[])
 	int left_n = 0; 		/* number of characters read from input stream */
 	/* For right side */
 	int right_passive_sock = -1; 	/* socket descriptor for right side server */ 	
-	int ruseport  = -1;
+	int ruseport  = PROTOPORT;
 	int racctport = -1;
 	char *racct_addr = NULL;	
 	char right_buf[1000]; 		/* buffer for string the server sends */
@@ -320,7 +323,7 @@ main(int argc,char *argv[])
 		char cur_char;
 		halfdelay(20);	
 		if ( (cur_char = wgetch(w[IO])) != ERR){
-			wrefresh(w[5]);
+			wrefresh(w[IO]);
 			int cur_y,cur_x;
 			getyx(w[IO],cur_y,cur_x);
 			wrpos[IO]=cur_y;
@@ -334,7 +337,6 @@ main(int argc,char *argv[])
 				wrpos[IO]=cur_y;
 				wcpos[IO]=cur_x;
 				wmove(w[IO],wrpos[IO],wcpos[IO]);
-				wClrtoeol(IO);
 				/* parse input */	
 				while ((cur_char = wgetch(w[IO])) != 27){
 					if (cur_char == BACKSPACE){ // A backspace
@@ -378,10 +380,12 @@ main(int argc,char *argv[])
 				echo();
 				/* Put command into commands[]*/
 				command_count = 0;
-				command_lengths[command_count] = 0;
+				for (i = 0; i < 3; i++)
+					command_lengths[i] = 0;
+				
 				while ((cur_char = wgetch(w[IO])) != EOF && cur_char != '\n'){
 					if (cur_char == ' '){
-						commands[command_count][command_lengths[command_count]] = 0; // make command i proper
+						commands[command_count][command_lengths[command_count]] = '\0'; // make command i proper
 						if (++command_count > 2){
 							wAddstr(IO,"No valid commands have more than two args.");
 							break;
@@ -391,15 +395,20 @@ main(int argc,char *argv[])
 					else	
 						commands[command_count][command_lengths[command_count]++] = cur_char;
 				}
-				if (command_lengths[command_count])
-					commands[command_lengths[command_count]] = 0;	
+				if (command_lengths[command_count] > 0)
+					commands[command_count][command_lengths[command_count]] = '\0';	
+				
 				cbreak();
 				noecho();
+
 				wrpos[IO] = wh[IO] -1;
 				wcpos[IO] = 1;
-				wClrtoeol(IO);
+				//wClrtoeol(IO);
 				wrpos[IO] = 1;
-				wmove(w[IO],wrpos[IO],wcpos[IO]);
+				wcpos[IO] =1;
+				wmove(w[IO],wrpos[IO],wcpos[IO]);	
+				wrefresh(w[IO]);
+				
 				/* Check if valid command and process it*/
 				if (strncmp(commands[0],"q",command_lengths[0]) == 0){
 					/* Close the sockets. */	
@@ -460,6 +469,11 @@ main(int argc,char *argv[])
 						luseport = atoi(commands[1]);
 					else
 						wAddstr(IO,"Must specify valid port number after :luseport\n");}
+				else if (strncmp(commands[0],"ruseport", command_lengths[0]) == 0){
+					if (command_lengths[1] > 0)
+						ruseport = atoi(commands[1]);
+					else
+						wAddstr(IO,"Must specify valid port number after :ruseport\n");}
 				else if (strncmp(commands[0],"lacctport",command_lengths[0]) == 0){
 					if (command_lengths[1] > 0)
 						lacctport = atoi(commands[1]);
@@ -487,8 +501,6 @@ main(int argc,char *argv[])
 						/* If luseport is not set then use protoport value */
 						if (command_lengths[1] > 0)
 							luseport = atoi(commands[1]);
-						else
-							luseport = PROTOPORT; 
 						if((left_passive_sock = create_server(luseport)) != -1){	
 							FD_SET(left_passive_sock, &inputs);
 							if (left_passive_sock > max_fd)
@@ -501,10 +513,11 @@ main(int argc,char *argv[])
 						wAddstr(IO,"Already a right side. Use dropr and try agian.\n");
 					else { 
 						/* If port specified use it. else use protoport value */
+						wAddnstr(IO,commands[1],command_lengths[1]);
+						wrefresh(w[IO]);
+
 						if (command_lengths[1] > 0)
 							ruseport = atoi(commands[1]);
-						else
-							ruseport = PROTOPORT; 
 						if((right_passive_sock = create_server(ruseport)) != -1){	
 							FD_SET(right_passive_sock, &inputs);
 							if (right_passive_sock > max_fd)
@@ -558,12 +571,34 @@ main(int argc,char *argv[])
 						else
 							wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");
 					}}
-				
+				else if ((strncmp(commands[0],"read",command_lengths[0])) == 0){
+					if (command_lengths[1] > 0){
+						int read_fd = open(commands[1],O_RDONLY);
+						while ((stdin_n = read(read_fd,stdin_buf,sizeof(stdin_buf))) > 0){
+							if (outputr && right_sock != -1){
+								write(right_sock,stdin_buf,stdin_n);
+								wAddnstr(OUT_R,stdin_buf,stdin_n);}
+							else if (outputl && left_sock != -1){
+								write(left_sock, stdin_buf,stdin_n);
+								wAddnstr(OUT_L,stdin_buf,stdin_n);}
+						}
+						
+						if (stdin_n < 0)
+							wAddstr(IO,"Error reading file\n");	
+						if (stdin_n = 0)
+							wAddstr(IO,"Seccessfully read whole file\n");
+					
+						/*clean up */
+						close(read_fd);
+						stdin_n = 0;}
+					else
+						wAddstr(IO,"Must specify name of file to read from\n");
+				}	
 				else
-					wprintw(w[IO],"Not a valid command :%s\n",commands[0]);	
+					wAddstr(IO,"Not a valid command.\n");
+				wrefresh(w[IO]);	
 			}
-		}
-		
+		}	
 		/* read from left side. */	
 		if (FD_ISSET(left_sock,&inputs_loop)){
 			if ((left_n = read(left_sock,left_buf,sizeof(left_buf))) == 0){
@@ -690,7 +725,22 @@ void wAddnstr(int i, char s[1000],int n){
 
 /* Return the tcp pair in the form source_IP:Source_port:destination_IP:destination_Port */
 void tcp_info(int passive_sock, int sock){
-
+	struct sockaddr_in peeraddr;
+	socklen_t peeraddr_len = sizeof(peeraddr);
+	char straddr[INET_ADDRSTRLEN];
+	char *peeraddr_str;
+	char peerport_str[6];
+	if (sock != -1)
+		getpeername(sock,(struct sockaddr*)&peeraddr,&peeraddr_len);
+	else if (passive_sock != -1)
+		getpeername(sock,(struct sockaddr*)&peeraddr,&peeraddr_len);
+	else {
+		wAddstr(IO,"-:-:-:-\n");
+		return;
+	}	
+	inet_ntop(AF_INET, &peeraddr.sin_addr,straddr, sizeof(straddr));	
+	sprintf(peerport_str,"%d",ntohs(peeraddr.sin_port));
+		
 }
 
 /* Wrapper for accept that checks the accepted connection is from the valid ip and port.
