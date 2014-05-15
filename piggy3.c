@@ -64,6 +64,12 @@ int create_server(int port);
 *  host (IP or host name) and port */
 int create_client(char *host, int port);
 
+/* prints a info about socket in the form sourceIP:sourcePort:destinationIP:destinationPort*/ 
+void pair_info(int passive_sock,int sock,int port);
+
+/* wrapper for close the removes the socket from inputs and sets sock to -1 */
+void Close(int *sock);
+
 /* Check that string contains a numeric value */
 int is_numeric(char *s){
 	while (*s){
@@ -415,34 +421,24 @@ main(int argc,char *argv[])
 				/* Check if valid command and process it*/
 				if (strncmp(commands[0],"q",command_lengths[0]) == 0){
 					/* Close the sockets. */	
+					closesocket(left_sock);
 					closesocket(right_sock);
 					closesocket(left_passive_sock);
-					if (left_sock != -1)
-						closesocket(left_sock);	
+					closesocket(right_passive_sock);
 					/* Put piggy out to paster */
 					endwin();
 					exit(0);}
 				else if (strncmp(commands[0],"dropl",command_lengths[0]) == 0){
 					if (left_passive_sock != -1 || left_sock != -1){
-						if (left_sock != -1){
-							closesocket(left_sock);
-							FD_CLR(left_sock,&inputs);
-							left_sock = -1;
-						}
-						closesocket(left_passive_sock);
-						FD_CLR(left_passive_sock,&inputs);
-						left_passive_sock = -1;
+						Close(&left_sock);
+						Close(&left_passive_sock);
 						wAddstr(IO,"Dropped the left side connection.\n");} 
 					else
 						wAddstr(IO,"No left side connection to drop.\n");}
 				else if (strncmp(commands[0],"dropr",command_lengths[0]) == 0){
 					if (right_passive_sock != -1 || right_sock != -1){
-						closesocket(right_passive_sock);
-						FD_CLR(right_passive_sock, &inputs);
-						right_passive_sock = -1;
-						closesocket(right_sock);
-						FD_CLR(right_sock,&inputs);
-						right_sock = -1;
+						Close(&right_passive_sock);
+						Close(&right_sock);
 						wAddstr(IO,"Dropped the right side connection.\n");}
 					else
 						wAddstr(IO,"No right side connection to drop.\n");}
@@ -457,48 +453,10 @@ main(int argc,char *argv[])
 				else if (strncmp(commands[0],"outputr",command_lengths[0]) == 0){
 					outputl = false;
 					outputr = true;}	
-				else if (strncmp(commands[0], "lpair", command_lengths[0]) == 0){
-						char return_str[46];
-						/* left side is currently passive */
-						if (left_passive_sock != -1){ 
-							/*if left side has accepted a connection */ 
-							if (left_sock != -1)
-								strcat(return_str,peer_info(left_sock));
-							else
-								strcat(return_str,"-:-");
-							strcat(return_str,":");	
-							strcat(return_str,my_info(left_passive_sock,luseport));
-							strcat(return_str, "\n");}
-						/* left side is active connection */
-						else if (left_sock != -1){
-							strcat(return_str,my_info(left_sock,luseport));
-							strcat(return_str,":");	
-							strcat(return_str,peer_info(left_sock));
-							strcat(return_str,"\n");}
-						else
-							strcat(return_str,"-:-:-:-\n");
-						wAddstr(IO,return_str);}
-				else if (strncmp(commands[0], "rpair", command_lengths[0]) == 0){
-						char return_str[46];
-						/* left side is currently passive */
-						if (right_passive_sock != -1){ 
-							/*if left side has accepted a connection */ 
-							if (right_sock != -1)
-								strcat(return_str,peer_info(right_sock));
-							else
-								strcat(return_str,"-:-");	
-							strcat(return_str,":");
-							strcat(return_str,my_info(right_passive_sock,ruseport));
-							strcat(return_str, "\n");}
-						/* left side is active connection */
-						else if (right_sock != -1){
-							strcat(return_str,my_info(right_sock,ruseport));
-							strcat(return_str,":");
-							strcat(return_str,peer_info(right_sock));
-							strcat(return_str,"\n");}
-						else
-							strcat(return_str,"-:-:-:-\n");
-						wAddstr(IO,return_str);}
+				else if (strncmp(commands[0], "lpair", command_lengths[0]) == 0)
+						pair_info(left_passive_sock, left_sock, luseport);
+				else if (strncmp(commands[0], "rpair", command_lengths[0]) == 0)
+						pair_info(right_passive_sock, right_sock, ruseport);
 				else if (strncmp(commands[0],"loopl",command_lengths[0]) == 0){
 					loopr = false;
 					loopl = true;}	
@@ -641,9 +599,7 @@ main(int argc,char *argv[])
 		if (FD_ISSET(left_sock,&inputs_loop)){
 			if ((left_n = read(left_sock,left_buf,sizeof(left_buf))) == 0){
 				wAddstr(IO,"Lost connection to left side. \n");	
-				closesocket(left_sock);
-				FD_CLR(left_sock, &inputs);
-				left_sock = -1;}
+				Close(&left_sock);}
 			else // Display input from left to top left corner
 				wAddnstr(IN_L,left_buf,left_n);
 		}
@@ -652,9 +608,7 @@ main(int argc,char *argv[])
 		if (FD_ISSET(right_sock, &inputs_loop)){
 			if ((right_n = read(right_sock, right_buf,sizeof(right_buf))) == 0){
 				wAddstr(IO,"Lost connection to right side. \n");
-				closesocket(right_sock);
-				FD_CLR(right_sock, &inputs);
-				right_sock = -1;}
+				Close(&right_sock);}
 			else // Display input from right to bottom right corner
 				wAddnstr(IN_R,right_buf,right_n);	
 		}
@@ -707,28 +661,10 @@ void wClrtoeol(int i){
 	/* move cursor back to where it started */
 	wmove(w[i],wrpos[i],wcpos[i]);
 }
+
 /* Prints string to window w[i] */
 void wAddstr(int i, char s[132]){
-	int j,l,y,x;
-	getyx(w[i],y,x);      // find out where we are in the window
-  	y=y?y:!y;
-  	x=x?x:!x;  
-  	wrpos[i]=y;
-  	wcpos[i]=x;
-  	l=strlen(s);
-	wClrtoeol(i);
-  	for (j=0;j<l;j++){ 
-		if (++wcpos[i]==ww[i] -1 || s[j] == '\n') {
-	  		wcpos[i]=1;
-	  		if (++wrpos[i]==wh[i] -1){
-				wrpos[i]=1;
-				wClrtoeol(i);
-			}
-		}
-		else	
-      			mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]);   
-    	}
-  	wrefresh(w[i]);
+	wAddnstr(i, s, strlen(s));
 }
 
 /* Prints from 0 to n of buffer to window w[i]*/ 
@@ -739,6 +675,7 @@ void wAddnstr(int i, char s[1000],int n){
   	x=x?x:!x;  
   	wrpos[i]=y;
   	wcpos[i]=x;
+	wClrtoeol(i);
   	for (j=0;j<n;j++){
       		if (++wcpos[i]==ww[i] -1 || s[j] == '\n') {
 	  		wcpos[i]=1;
@@ -757,14 +694,46 @@ void wAddnstr(int i, char s[1000],int n){
 // Functions for networking.
 /******************************************************************************************/
 
+/* wrapper for close the removes the socket from inputs and sets sock to -1 */
+void Close(int *sock){
+	closesocket(*sock);
+	FD_CLR(*sock,&inputs);
+	*sock = -1;
+}
+
+/* prints a info about socket in the form sourceIP:sourcePort:destinationIP:destinationPort*/ 
+void pair_info(passive_sock, sock, port){
+	char return_str[46];
+	memset(return_str,0,sizeof(return_str));
+	/* Side is currently passive */
+	if (passive_sock != -1){ 
+		/*if side has accepted a connection */ 
+		if (sock != -1)
+			strcat(return_str,peer_info(sock));
+		else
+			strcat(return_str,"-:-");	
+		strcat(return_str,":");
+		strcat(return_str,my_info(passive_sock,port));
+		strcat(return_str, "\n");}
+	/*Side is active connection */
+	else if (sock != -1){
+		strcat(return_str,my_info(sock,port));
+		strcat(return_str,":");
+		strcat(return_str,peer_info(sock));
+		strcat(return_str,"\n");}
+	else
+		strcat(return_str,"-:-:-:-\n");
+	wAddstr(IO,return_str);
+}
+
 /* Returns a str in the form peer_IP:peer_port */
 char *peer_info(int sock){
 	struct sockaddr_in peeraddr;
 	socklen_t peeraddr_len = sizeof(peeraddr);
 	char straddr[INET_ADDRSTRLEN];
-	//char *peeraddr_str;
 	char peerport_str[6];
-	static char return_str[23];	
+	static char return_str[23];
+	memset(return_str,0,sizeof(return_str));	
 	if (sock != -1){
 		getpeername(sock,(struct sockaddr*)&peeraddr,&peeraddr_len);
 		inet_ntop(AF_INET, &peeraddr.sin_addr,straddr, sizeof(straddr));	
@@ -784,6 +753,7 @@ char *my_info(int sock,int port){
 	char straddr[INET_ADDRSTRLEN];
 	char myport_str[6];
 	static char return_str[23];
+	memset(return_str,0,sizeof(return_str));
 	char localhost[32];
 	if (sock != -1){
 		// get local address	
@@ -802,6 +772,7 @@ char *my_info(int sock,int port){
 	else
 		return "-:-";
 }
+
 /* Wrapper for accept that checks the accepted connection is from the valid ip and port.
 *  Then adds it to the set of file descriptors and returns the socket */
 int Accept(int sock_in,char* acct_addr,int acct_port){
