@@ -319,7 +319,6 @@ main(int argc,char *argv[])
 	bool output_stdin = false;
 	fd_set inputs_loop = inputs;
 	while (1) {
-		wmove(w[IO],wrpos[IO],wcpos[IO]);
 		inputs_loop = inputs;
 		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,&timeout);
 
@@ -341,6 +340,7 @@ main(int argc,char *argv[])
 					insert = true; 
 					/* show that the user has entered insert mode */
 					mvwprintw(w[IO],wh[IO] -1,1,"-- INSERT --");
+					wmove(w[IO],wrpos[IO],wcpos[IO]);
 				}
 				else if ( cur_char == ':'){
 					command = true;
@@ -395,238 +395,219 @@ main(int argc,char *argv[])
 				output_stdin = false;	
 				stdin_n = 0;
 			}
-			wmove(w[IO],wrpos[IO],wcpos[IO]);
+			wmove(w[IO],wrpos[IO],wcpos[IO] + 1);
 			wrefresh(w[5]);
 		}
-				
-
-
-
-
-			/*
-			wrefresh(w[IO]);
-			int cur_y,cur_x;
-			getyx(w[IO],cur_y,cur_x);
-			wrpos[IO]=cur_y;
-  			wcpos[IO]=cur_x;
-			*/
-			
-			/* Process input commands */
-			/* Insert Mode */
-				//wrpos[IO]=cur_y;
-				//wcpos[IO]=cur_x;
-			//	wmove(w[IO],wrpos[IO],wcpos[IO]);
-			/* Command Mode */	
 		else if (command){
-				nocbreak();
-				echo();
-				/* Put command into commands[]*/
-				command_count = 0;
-				for (i = 0; i < 3; i++)
-					command_lengths[i] = 0;
-				
-				while ((cur_char = wgetch(w[IO])) != EOF && cur_char != '\n'){
-					if (cur_char == ' '){
-						commands[command_count][command_lengths[command_count]] = '\0'; // make command i proper
-						if (++command_count > 2){
-							wAddstr(IO,"No valid commands have more than two args.");
-							break;
-						}
-						command_lengths[command_count] = 0;
+			nocbreak();
+			echo();
+			/* Put command into commands[]*/
+			command_count = 0;
+			for (i = 0; i < 3; i++)
+				command_lengths[i] = 0;
+			
+			while ((cur_char = wgetch(w[IO])) != EOF && cur_char != '\n'){
+				if (cur_char == ' '){
+					commands[command_count][command_lengths[command_count]] = '\0'; // make command i proper
+					if (++command_count > 2){
+						wAddstr(IO,"No valid commands have more than two args.");
+						break;
 					}
-					else	
-						commands[command_count][command_lengths[command_count]++] = cur_char;
+					command_lengths[command_count] = 0;
 				}
-				if (command_lengths[command_count] > 0)
-					commands[command_count][command_lengths[command_count]] = '\0';	
-				
-				cbreak();
-				noecho();
+				else	
+					commands[command_count][command_lengths[command_count]++] = cur_char;
+			}
+			if (command_lengths[command_count] > 0)
+				commands[command_count][command_lengths[command_count]] = '\0';	
+			
+			cbreak();
+			noecho();
 
-				wrpos[IO] = wh[IO] -1;
-				wcpos[IO] = 1;
-				wClrtoeol(IO);
-				wrpos[IO] = 1;
-				wcpos[IO] =1;
-				wmove(w[IO],wrpos[IO],wcpos[IO]);	
-				wrefresh(w[IO]);
-				
-				/* Check if valid command and process it*/
-				if (strncmp(commands[0],"q",command_lengths[0]) == 0){
-					/* Close the sockets. */	
-					closesocket(left_sock);
-					closesocket(right_sock);
-					closesocket(left_passive_sock);
-					closesocket(right_passive_sock);
-					/* Put piggy out to paster */
-					endwin();
-					exit(0);}
-				else if (strncmp(commands[0],"dropl",command_lengths[0]) == 0){
-					if (left_passive_sock != -1 || left_sock != -1){
-						Close(&left_sock);
-						Close(&left_passive_sock);
-						wAddstr(IO,"Dropped the left side connection.\n");} 
-					else
-						wAddstr(IO,"No left side connection to drop.\n");}
-				else if (strncmp(commands[0],"dropr",command_lengths[0]) == 0){
-					if (right_passive_sock != -1 || right_sock != -1){
-						Close(&right_passive_sock);
-						Close(&right_sock);
-						wAddstr(IO,"Dropped the right side connection.\n");}
-					else
-						wAddstr(IO,"No right side connection to drop.\n");}
-				else if (strncmp(commands[0],"output",command_lengths[0]) == 0){
-					if (outputr)
-						wAddstr(IO,"The current output direction for insert mode is to the right.\n");
-					else 
-						wAddstr(IO,"The current output direction for insert mode is to the left. \n");}
-				else if (strncmp(commands[0],"outputl",command_lengths[0]) == 0){
-					outputr = false;
-					outputl = true;}
-				else if (strncmp(commands[0],"outputr",command_lengths[0]) == 0){
-					outputl = false;
-					outputr = true;}	
-				else if (strncmp(commands[0], "lpair", command_lengths[0]) == 0)
-						pair_info(left_passive_sock, left_sock, luseport);
-				else if (strncmp(commands[0], "rpair", command_lengths[0]) == 0)
-						pair_info(right_passive_sock, right_sock, ruseport);
-				else if (strncmp(commands[0],"loopl",command_lengths[0]) == 0){
-					loopr = false;
-					loopl = true;}	
-				else if (strncmp(commands[0],"loopr",command_lengths[0]) == 0){
-					loopl = false;
-					loopr = true;}	
-				else if (strncmp(commands[0],"luseport",command_lengths[0]) == 0){
+			wrpos[IO] = wh[IO] -1;
+			wcpos[IO] = 1;
+			wClrtoeol(IO);
+			wrpos[IO] = 1;
+			wcpos[IO] =1;
+			wmove(w[IO],wrpos[IO],wcpos[IO]);	
+			wrefresh(w[IO]);
+			
+			/* Check if valid command and process it*/
+			if (strncmp(commands[0],"q",command_lengths[0]) == 0){
+				/* Close the sockets. */	
+				closesocket(left_sock);
+				closesocket(right_sock);
+				closesocket(left_passive_sock);
+				closesocket(right_passive_sock);
+				/* Put piggy out to paster */
+				endwin();
+				exit(0);}
+			else if (strncmp(commands[0],"dropl",command_lengths[0]) == 0){
+				if (left_passive_sock != -1 || left_sock != -1){
+					Close(&left_sock);
+					Close(&left_passive_sock);
+					wAddstr(IO,"Dropped the left side connection.\n");} 
+				else
+					wAddstr(IO,"No left side connection to drop.\n");}
+			else if (strncmp(commands[0],"dropr",command_lengths[0]) == 0){
+				if (right_passive_sock != -1 || right_sock != -1){
+					Close(&right_passive_sock);
+					Close(&right_sock);
+					wAddstr(IO,"Dropped the right side connection.\n");}
+				else
+					wAddstr(IO,"No right side connection to drop.\n");}
+			else if (strncmp(commands[0],"output",command_lengths[0]) == 0){
+				if (outputr)
+					wAddstr(IO,"The current output direction for insert mode is to the right.\n");
+				else 
+					wAddstr(IO,"The current output direction for insert mode is to the left. \n");}
+			else if (strncmp(commands[0],"outputl",command_lengths[0]) == 0){
+				outputr = false;
+				outputl = true;}
+			else if (strncmp(commands[0],"outputr",command_lengths[0]) == 0){
+				outputl = false;
+				outputr = true;}	
+			else if (strncmp(commands[0], "lpair", command_lengths[0]) == 0)
+					pair_info(left_passive_sock, left_sock, luseport);
+			else if (strncmp(commands[0], "rpair", command_lengths[0]) == 0)
+					pair_info(right_passive_sock, right_sock, ruseport);
+			else if (strncmp(commands[0],"loopl",command_lengths[0]) == 0){
+				loopr = false;
+				loopl = true;}	
+			else if (strncmp(commands[0],"loopr",command_lengths[0]) == 0){
+				loopl = false;
+				loopr = true;}	
+			else if (strncmp(commands[0],"luseport",command_lengths[0]) == 0){
+				if (command_lengths[1] > 0)
+					luseport = atoi(commands[1]);
+				else
+					wAddstr(IO,"Must specify valid port number after :luseport\n");}
+			else if (strncmp(commands[0],"ruseport", command_lengths[0]) == 0){
+				if (command_lengths[1] > 0)
+					ruseport = atoi(commands[1]);
+				else
+					wAddstr(IO,"Must specify valid port number after :ruseport\n");}
+			else if (strncmp(commands[0],"lacctport",command_lengths[0]) == 0){
+				if (command_lengths[1] > 0)
+					lacctport = atoi(commands[1]);
+				else
+					wAddstr(IO,"Must specify valid port number after :lacctport\n");}
+			else if (strncmp(commands[0],"racctport", command_lengths[0]) == 0){
+				if (command_lengths[1] > 0)
+					racctport = atoi(commands[1]);
+				else
+					wAddstr(IO,"Must specify valid port number after :racctport.\n");}
+			else if (strncmp(commands[0],"laccptip", command_lengths[0]) == 0){
+				if (command_lengths[1] > 0)
+					lacct_addr = commands[1];
+				else
+					wAddstr(IO,"Must specify valid IP number after :lacctip\n");}
+			else if (strncmp(commands[0],"racctip", command_lengths[0]) == 0){
+				if (command_lengths[1] > 0)
+					racct_addr = commands[1];
+				else
+					wAddstr(IO,"Must specify valid IP number after :racctip\n");}
+			else if (strncmp(commands[0],"listenl", command_lengths[0]) == 0){
+				if (left_passive_sock != -1 || left_sock != -1)
+					wAddstr(IO,"Already a left side. Use dropl and try agian\n");
+				else { 
+					/* If luseport is not set then use protoport value */
 					if (command_lengths[1] > 0)
 						luseport = atoi(commands[1]);
+					if((left_passive_sock = create_server(luseport)) != -1){	
+						FD_SET(left_passive_sock, &inputs);
+						if (left_passive_sock > max_fd)
+							max_fd = left_passive_sock;}
 					else
-						wAddstr(IO,"Must specify valid port number after :luseport\n");}
-				else if (strncmp(commands[0],"ruseport", command_lengths[0]) == 0){
+						wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");
+				}}
+			else if (strncmp(commands[0],"listenr",command_lengths[0]) == 0){
+				if (right_passive_sock != -1 || right_sock != -1)
+					wAddstr(IO,"Already a right side. Use dropr and try agian.\n");
+				else { 
+					/* If port specified use it. else use protoport value */
 					if (command_lengths[1] > 0)
 						ruseport = atoi(commands[1]);
+					if((right_passive_sock = create_server(ruseport)) != -1){	
+						FD_SET(right_passive_sock, &inputs);
+						if (right_passive_sock > max_fd)
+							max_fd = right_passive_sock;}
 					else
-						wAddstr(IO,"Must specify valid port number after :ruseport\n");}
-				else if (strncmp(commands[0],"lacctport",command_lengths[0]) == 0){
+						wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");
+				}}
+			else if (strncmp(commands[0],"connectl",command_lengths[0]) == 0){
+				if (left_passive_sock != -1 || left_sock != -1)
+					wAddstr(IO,"Already a left side. Use dropl and try again.\n");
+				else {
+					/* Get IP address */
 					if (command_lengths[1] > 0)
-						lacctport = atoi(commands[1]);
+						lconnect_addr = commands[1];
 					else
-						wAddstr(IO,"Must specify valid port number after :lacctport\n");}
-				else if (strncmp(commands[0],"racctport", command_lengths[0]) == 0){
+						wAddstr(IO,"Must specify address or host name to connect to.\n");
+					/* Get port number */	
+					if (command_lengths[2] > 0)
+						luseport = atoi(commands[2]);
+					else
+						wAddstr(IO,"Must specify port number to connect to.\n");
+					/* Create socket */	
+					if ((left_sock = create_client(lconnect_addr, luseport)) != -1){
+						wAddstr(IO,"Piggy has a valid left connection.\n");
+						FD_SET(right_sock, &inputs);
+					if (left_sock > max_fd)
+						max_fd = left_sock;}
+					else
+						wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");
+				}}
+			else if (strncmp(commands[0],"connectr",command_lengths[0]) == 0){
+				if (right_passive_sock != -1 || right_sock != -1)
+					wAddstr(IO,"Already a right side. Use dropr and try again.\n");
+				else {
+					/* Get IP address */
 					if (command_lengths[1] > 0)
-						racctport = atoi(commands[1]);
+						raddr = commands[1];
 					else
-						wAddstr(IO,"Must specify valid port number after :racctport.\n");}
-				else if (strncmp(commands[0],"laccptip", command_lengths[0]) == 0){
-					if (command_lengths[1] > 0)
-						lacct_addr = commands[1];
+						wAddstr(IO,"Must specify address or host name to connect to.\n");
+					/* Get port number */	
+					if (command_lengths[2] > 0)
+						rport = atoi(commands[2]);
 					else
-						wAddstr(IO,"Must specify valid IP number after :lacctip\n");}
-				else if (strncmp(commands[0],"racctip", command_lengths[0]) == 0){
-					if (command_lengths[1] > 0)
-						racct_addr = commands[1];
+						wAddstr(IO,"Must specify port number to connect to.\n");
+					/* Create socket */	
+					if ((right_sock = create_client(raddr, rport)) != -1){
+						wAddstr(IO,"Piggy has a valid right connection.\n");
+						FD_SET(right_sock, &inputs);
+					if (right_sock > max_fd)
+						max_fd = right_sock;}
 					else
-						wAddstr(IO,"Must specify valid IP number after :racctip\n");}
-				else if (strncmp(commands[0],"listenl", command_lengths[0]) == 0){
-					if (left_passive_sock != -1 || left_sock != -1)
-						wAddstr(IO,"Already a left side. Use dropl and try agian\n");
-					else { 
-						/* If luseport is not set then use protoport value */
-						if (command_lengths[1] > 0)
-							luseport = atoi(commands[1]);
-						if((left_passive_sock = create_server(luseport)) != -1){	
-							FD_SET(left_passive_sock, &inputs);
-							if (left_passive_sock > max_fd)
-								max_fd = left_passive_sock;}
-						else
-							wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");
-					}}
-				else if (strncmp(commands[0],"listenr",command_lengths[0]) == 0){
-					if (right_passive_sock != -1 || right_sock != -1)
-						wAddstr(IO,"Already a right side. Use dropr and try agian.\n");
-					else { 
-						/* If port specified use it. else use protoport value */
-						if (command_lengths[1] > 0)
-							ruseport = atoi(commands[1]);
-						if((right_passive_sock = create_server(ruseport)) != -1){	
-							FD_SET(right_passive_sock, &inputs);
-							if (right_passive_sock > max_fd)
-								max_fd = right_passive_sock;}
-						else
-							wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");
-					}}
-				else if (strncmp(commands[0],"connectl",command_lengths[0]) == 0){
-					if (left_passive_sock != -1 || left_sock != -1)
-						wAddstr(IO,"Already a left side. Use dropl and try again.\n");
-					else {
-						/* Get IP address */
-						if (command_lengths[1] > 0)
-							lconnect_addr = commands[1];
-						else
-							wAddstr(IO,"Must specify address or host name to connect to.\n");
-						/* Get port number */	
-						if (command_lengths[2] > 0)
-							luseport = atoi(commands[2]);
-						else
-							wAddstr(IO,"Must specify port number to connect to.\n");
-						/* Create socket */	
-						if ((left_sock = create_client(lconnect_addr, luseport)) != -1){
-							wAddstr(IO,"Piggy has a valid left connection.\n");
-							FD_SET(right_sock, &inputs);
-						if (left_sock > max_fd)
-							max_fd = left_sock;}
-						else
-							wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");
-					}}
-				else if (strncmp(commands[0],"connectr",command_lengths[0]) == 0){
-					if (right_passive_sock != -1 || right_sock != -1)
-						wAddstr(IO,"Already a right side. Use dropr and try again.\n");
-					else {
-						/* Get IP address */
-						if (command_lengths[1] > 0)
-							raddr = commands[1];
-						else
-							wAddstr(IO,"Must specify address or host name to connect to.\n");
-						/* Get port number */	
-						if (command_lengths[2] > 0)
-							rport = atoi(commands[2]);
-						else
-							wAddstr(IO,"Must specify port number to connect to.\n");
-						/* Create socket */	
-						if ((right_sock = create_client(raddr, rport)) != -1){
-							wAddstr(IO,"Piggy has a valid right connection.\n");
-							FD_SET(right_sock, &inputs);
-						if (right_sock > max_fd)
-							max_fd = right_sock;}
-						else
-							wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");
-					}}
-				else if ((strncmp(commands[0],"read",command_lengths[0])) == 0){
-					if (command_lengths[1] > 0){
-						int read_fd = open(commands[1],O_RDONLY);
-						while ((stdin_n = read(read_fd,stdin_buf,sizeof(stdin_buf))) > 0){
-							if (outputr && right_sock != -1){
-								write(right_sock,stdin_buf,stdin_n);
-								wAddnstr(OUT_R,stdin_buf,stdin_n);}
-							else if (outputl && left_sock != -1){
-								write(left_sock, stdin_buf,stdin_n);
-								wAddnstr(OUT_L,stdin_buf,stdin_n);}
-						}
-						
-						if (stdin_n < 0)
-							wAddstr(IO,"Error reading file\n");	
-						if (stdin_n = 0)
-							wAddstr(IO,"Seccessfully read whole file\n");
+						wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");
+				}}
+			else if ((strncmp(commands[0],"read",command_lengths[0])) == 0){
+				if (command_lengths[1] > 0){
+					int read_fd = open(commands[1],O_RDONLY);
+					while ((stdin_n = read(read_fd,stdin_buf,sizeof(stdin_buf))) > 0){
+						if (outputr && right_sock != -1){
+							write(right_sock,stdin_buf,stdin_n);
+							wAddnstr(OUT_R,stdin_buf,stdin_n);}
+						else if (outputl && left_sock != -1){
+							write(left_sock, stdin_buf,stdin_n);
+							wAddnstr(OUT_L,stdin_buf,stdin_n);}
+					}
 					
-						/*clean up */
-						close(read_fd);
-						stdin_n = 0;}
-					else
-						wAddstr(IO,"Must specify name of file to read from\n");
-				}	
+					if (stdin_n < 0)
+						wAddstr(IO,"Error reading file\n");	
+					if (stdin_n = 0)
+						wAddstr(IO,"Seccessfully read whole file\n");
+				
+					/*clean up */
+					close(read_fd);
+					stdin_n = 0;}
 				else
-					wAddstr(IO,"Not a valid command.\n");
-				wrefresh(w[IO]);	
-			}
+					wAddstr(IO,"Must specify name of file to read from\n");
+			}	
+			else
+				wAddstr(IO,"Not a valid command.\n");
+			wrefresh(w[IO]);	
+		}
 		
 		/* read from left side. */	
 		if (FD_ISSET(left_sock,&inputs_loop)){
@@ -675,7 +656,7 @@ main(int argc,char *argv[])
 void wClrtoeol(int i){
 	int row = wrpos[i];
 	int col;
-	for (col = 1; col < ww[i]; col++)
+	for (col = wcpos[i]; col < ww[i]; col++)
 		mvwaddch(w[i],row,col,' ');
 	/* move cursor back to where it started */
 	wmove(w[i],wrpos[i],wcpos[i]);
