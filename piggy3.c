@@ -313,6 +313,10 @@ main(int argc,char *argv[])
 		outputr = false;
 		outputl = true;
 	}
+	/* modes */
+	bool insert = false;
+	bool command = false;
+	bool output_stdin = false;
 	fd_set inputs_loop = inputs;
 	while (1) {
 		wmove(w[IO],wrpos[IO],wcpos[IO]);
@@ -331,60 +335,89 @@ main(int argc,char *argv[])
 		/* read input from stdin */
 		char cur_char;
 		halfdelay(20);	
-		if ( (cur_char = wgetch(w[IO])) != ERR){
-			wrefresh(w[IO]);
-			int cur_y,cur_x;
-			getyx(w[IO],cur_y,cur_x);
-			wrpos[IO]=cur_y;
-  			wcpos[IO]=cur_x;
-
-			/* Process input commands */
-			/* Insert Mode */
-			if (cur_char == 'i'){
-				/* show that the user has entered insert mode */
-				mvwprintw(w[IO],wh[IO] -1,1,"-- INSERT --");
-				wrpos[IO]=cur_y;
-				wcpos[IO]=cur_x;
-				wmove(w[IO],wrpos[IO],wcpos[IO]);
-				/* parse input */	
-				while ((cur_char = wgetch(w[IO])) != 27){
-					if (cur_char == BACKSPACE){ // A backspace
-						if (stdin_n != 0){
-							--stdin_n;
-							mvwaddch(w[IO],wrpos[IO],wcpos[IO],' ');
-							wmove(w[IO],wrpos[IO],wcpos[IO]);
-							wcpos[IO]--;
-						}}
-					else if (cur_char == ENTER){ // An enter
-						stdin_buf[stdin_n++] = '\n';
-						if (++wrpos[IO] == wh[IO] - 1)
-							wrpos[IO] = 1;
-				
-						wcpos[IO] = 1;
-						wmove(w[IO],wrpos[IO],wcpos[IO]);}
-					else if ((cur_char >= 32) && (cur_char != 127)){
-						if (++wcpos[IO] == ww[IO]){
-							wcpos[IO]=1;
-							if (++wrpos[IO]==wh[IO] -1)
-								wrpos[IO]=1;
-						}
-						stdin_buf[stdin_n++] = cur_char;
-						mvwaddch(w[IO],wrpos[IO],wcpos[IO],cur_char);
-					}	
-					wrefresh(w[5]);
+		if (!insert && !command){
+			if ( (cur_char = wgetch(w[IO])) != ERR){
+				if ( cur_char == 'i'){
+					insert = true; 
+					/* show that the user has entered insert mode */
+					mvwprintw(w[IO],wh[IO] -1,1,"-- INSERT --");
 				}
-				/* Clean up */
-				stdin_buf[stdin_n] = 0;// make it a proper string	
+				else if ( cur_char == ':'){
+					command = true;
+					mvwaddch(w[IO],wh[IO]-1, 1,':');
+				}
+			}}
+		else if (insert){
+			if ( (cur_char = wgetch(w[IO])) == 27){
+				insert = false;
+				stdin_buf[stdin_n] = 0;
+				output_stdin = true;
+				/*clean up */
 				for (i = 1; i < wh[IO]; i++){
 					for (j = 1; j < ww[IO]; j++)
 						mvwaddch(w[IO],i,j,' ');
 				}
 				wrpos[IO] = wcpos[IO] = 1;
-				wmove(w[IO],wrpos[IO],wcpos[IO]);		
-			}	
+				wmove(w[IO],wrpos[IO],wcpos[IO]);}
+			else if ( cur_char == BACKSPACE){
+				if (stdin_n != 0){
+					--stdin_n;
+					mvwaddch(w[IO],wrpos[IO],wcpos[IO],' ');
+					wmove(w[IO],wrpos[IO],wcpos[IO]);
+					wcpos[IO]--;
+				}}
+			else if (cur_char == ENTER){ // An enter
+				stdin_buf[stdin_n++] = '\n';
+				if (++wrpos[IO] == wh[IO] - 1)
+					wrpos[IO] = 1;
+		
+				wcpos[IO] = 1;
+				wmove(w[IO],wrpos[IO],wcpos[IO]);}
+			else if ((cur_char >= 32) && (cur_char != 127)){
+				if (++wcpos[IO] == ww[IO]){
+					wcpos[IO]=1;
+					if (++wrpos[IO]==wh[IO] -1)
+						wrpos[IO]=1;
+				}
+				stdin_buf[stdin_n++] = cur_char;
+				mvwaddch(w[IO],wrpos[IO],wcpos[IO],cur_char);
+			}
+			/* if a null terminated string is in stdbuf then output it */
+			if (stdin_n != 0 && output_stdin){
+				if (outputr && right_sock != -1){
+					write(right_sock,stdin_buf,stdin_n);
+					wAddnstr(OUT_R,stdin_buf,stdin_n);}
+				else if (outputl && left_sock != -1){
+					write(left_sock, stdin_buf,stdin_n);
+					wAddnstr(OUT_L,stdin_buf,stdin_n);}
+				else
+					wAddstr(IO,"Unable to output string. Check your output and loop settings are correct and try again.\n");
+				output_stdin = false;	
+				stdin_n = 0;
+			}
+			wmove(w[IO],wrpos[IO],wcpos[IO]);
+			wrefresh(w[5]);
+		}
+				
+
+
+
+
+			/*
+			wrefresh(w[IO]);
+			int cur_y,cur_x;
+			getyx(w[IO],cur_y,cur_x);
+			wrpos[IO]=cur_y;
+  			wcpos[IO]=cur_x;
+			*/
+			
+			/* Process input commands */
+			/* Insert Mode */
+				//wrpos[IO]=cur_y;
+				//wcpos[IO]=cur_x;
+			//	wmove(w[IO],wrpos[IO],wcpos[IO]);
 			/* Command Mode */	
-			else if (cur_char == ':'){
-				mvwaddch(w[IO],wh[IO]-1, 1,':');
+		else if (command){
 				nocbreak();
 				echo();
 				/* Put command into commands[]*/
@@ -594,7 +627,7 @@ main(int argc,char *argv[])
 					wAddstr(IO,"Not a valid command.\n");
 				wrefresh(w[IO]);	
 			}
-		}	
+		
 		/* read from left side. */	
 		if (FD_ISSET(left_sock,&inputs_loop)){
 			if ((left_n = read(left_sock,left_buf,sizeof(left_buf))) == 0){
@@ -611,20 +644,6 @@ main(int argc,char *argv[])
 				Close(&right_sock);}
 			else // Display input from right to bottom right corner
 				wAddnstr(IN_R,right_buf,right_n);	
-		}
-	
-		/* output contents of stdin_buf */
-		if (stdin_n != 0){
-			if (outputr && right_sock != -1){
-				write(right_sock,stdin_buf,stdin_n);
-				wAddnstr(OUT_R,stdin_buf,stdin_n);}
-			else if (outputl && left_sock != -1){
-				write(left_sock, stdin_buf,stdin_n);
-				wAddnstr(OUT_L,stdin_buf,stdin_n);}
-			else
-				wAddstr(IO,"Unable to output string. Check your output and loop settings are correct and try again.\n");
-			
-			stdin_n = 0;
 		}
 	
 		/* Output contents of left and right buffer if data is present */
