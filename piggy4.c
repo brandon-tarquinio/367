@@ -50,6 +50,12 @@ void wAddnstr(int i, char s[1000],int n);
 /* fills the buffer from curses getchar starting at spot n + 1 */
 void fillbuf(char *buf,char char_in,int *n);
 
+/* strips non-pritable chars from given buf. n is updated to the new size */
+void strip_np(char *buf,int *n);
+
+/* Same as strip_np but does not remove LF and CR */
+void strip_npxeol(char *buf, int *n);
+
 /* set up log file from command prompt.*/
 void logset(int *fd, char *file_name[],int arg_count);
 
@@ -325,6 +331,11 @@ main(int argc,char *argv[])
 	// logrl
 	int logrlpre_fd = -1;
 	int logrlpost_fd = -1;
+	/* Strips */
+	bool stlrnp_bool = false;
+	bool stlrnpx_bool = false;
+	bool strlnp_bool = false;
+	bool strlnpx_bool = false;
 	fd_set inputs_loop = inputs;
 	while (1) {
 		inputs_loop = inputs;
@@ -612,13 +623,37 @@ main(int argc,char *argv[])
 							else
 								wAddstr(IO,"Must specify name of file to read from\n");}
 						else if (strcmp(commands[0],"loglrpre") == 0)
-							logset(&loglrpre_fd, commands,command_count);
+							logset(&loglrpre_fd, commands, command_count);
 						else if (strcmp(commands[0],"loglrpost") == 0)
 							logset(&loglrpost_fd, commands, command_count);
 						else if (strcmp(commands[0],"logrlpre") == 0)
 							logset(&loglrpre_fd, commands, command_count);
 						else if (strcmp(commands[0],"logrlpost") == 0)
 							logset(&logrlpost_fd, commands, command_count);
+						else if (strcmp(commands[0],"stlrnp") == 0){
+							if (stlrnp_bool)
+								wAddstr(IO, "stlrnp already set\n");
+							else {
+								stlrnp_bool = true;
+								wAddstr(IO, "stlrnp is now set\n");}}
+						else if (strcmp(commands[0],"stlrnpxeol") == 0)
+							if (stlrnpx_bool)
+								wAddstr(IO, "stlrnpxeol is already set\n");
+							else {
+								stlrnpx_bool = true;
+								wAddstr(IO, "stlrnpxeol is now set\n");}}
+						else if (strcmp(commands[0],"strlnp") == 0)
+							if (strlnp)
+								wAddstr(IO,"strlnp is already set\n");
+							else {
+								strlnp_bool = true;
+								wAddstr(IO,"strlnp is now set\n");}}
+						else if (strcmp(commands[0],"strlnpxeol") == 0)
+							if (strlnpx_bool)
+								wAddstr(IO,"strlnpxeol is already set\n");
+							else {
+								strlnpx_bool = true;
+								wAddstr(IO,"strlnpxeol is now set\n");}}
 						else
 							wAddstr(IO,"Not a valid command.\n");
 						/* clean up */	
@@ -629,43 +664,76 @@ main(int argc,char *argv[])
 				}
 			}
 		}	
-	/* read from left side. */	
-	if (FD_ISSET(left_sock,&inputs_loop)){
-		if ((left_n = read(left_sock,left_buf,sizeof(left_buf))) == 0){
-			wAddstr(IO,"Lost connection to left side. \n");	
-			Close(&left_sock);}
-		else // Display input from left to top left corner
-			wAddnstr(IN_L,left_buf,left_n);
-	}
-	
-	/* read from right side. */
-	if (FD_ISSET(right_sock, &inputs_loop)){
-		if ((right_n = read(right_sock, right_buf,sizeof(right_buf))) == 0){
-			wAddstr(IO,"Lost connection to right side. \n");
-			Close(&right_sock);}
-		else // Display input from right to bottom right corner
-			wAddnstr(IN_R,right_buf,right_n);	
-	}
+		
+		/* read from left side. */	
+		if (FD_ISSET(left_sock,&inputs_loop)){
+			if ((left_n = read(left_sock,left_buf,sizeof(left_buf))) == 0){
+				wAddstr(IO,"Lost connection to left side. \n");	
+				Close(&left_sock);}
+			else // Display input from left to top left corner
+				wAddnstr(IN_L,left_buf,left_n);
+		}
+		
+		/* read from right side. */
+		if (FD_ISSET(right_sock, &inputs_loop)){
+			if ((right_n = read(right_sock, right_buf,sizeof(right_buf))) == 0){
+				wAddstr(IO,"Lost connection to right side. \n");
+				Close(&right_sock);}
+			else // Display input from right to bottom right corner
+				wAddnstr(IN_R,right_buf,right_n);	
+		}
 
-	/* Output contents of left and right buffer if data is present */
-	if (left_n != 0){
-		if (!loopr && right_sock != -1){
-			write(right_sock,left_buf,left_n);
-			wAddnstr(OUT_R,left_buf,left_n);}
-		else if (loopr && left_sock != -1){
-			write(left_sock,left_buf,left_n);
-			wAddnstr(OUT_L,left_buf,left_n);}
-		left_n = 0;
-	}
-	if (right_n != 0){
-		if (!loopl && left_sock != -1){
-			write(left_sock,right_buf,right_n);
-			wAddnstr(OUT_L,right_buf,right_n);}
-		else if (loopl && right_sock != -1){
-			write(right_sock,right_buf,right_n);
-			wAddnstr(OUT_R,right_buf,right_n);}
-		right_n = 0;
-	}
+		/* Output contents of left and right buffer if data is present */
+		if (left_n != 0){
+			if (!loopr && right_sock != -1){
+				if (loglrpre_fd != -1)
+					write(loglrpre_fd, left_buf,left_n);
+				if (stlrnp_bool)
+					strip_np(left_buf,&left_n);
+				if (stlrnpx_bool)
+					strip_npxeol(left_buf, &left_n);	
+				if (loglrpost_fd != -1)
+					write(loglrpost_fd, left_buf, left_n);
+				write(right_sock,left_buf,left_n);
+				wAddnstr(OUT_R,left_buf,left_n);}
+			else if (loopr && left_sock != -1){
+				if (logrlpre_fd != -1)
+					write(logrlpre_fd, left_buf, left_n);
+				if (strlnp_bool)
+					strip_np(left_buf, &left_n);
+				if (strlnpx_bool)
+					strip_npxeol(left_buf, &left_n);
+				if (logrlpost_fd != -1)
+					write(logrlpost_fd, left_buf, left_n);
+				write(left_sock,left_buf,left_n);
+				wAddnstr(OUT_L,left_buf,left_n);}
+			left_n = 0;
+		}
+		if (right_n != 0){
+			if (!loopl && left_sock != -1){
+				if (logrlpre_fd != -1)
+					write(logrlpre_fd, right_buf, right_n);
+				if (strlnp_bool)
+					strip_np(right_buf, &right_n);
+				if (strlnpx_bool)
+					strip_npxeol(right_buf, &right_n);
+				if (logrlpost_fd != -1)
+					write(logrlpost_fd, right_buf, right_n);
+				write(left_sock,right_buf,right_n);
+				wAddnstr(OUT_L,right_buf,right_n);}
+			else if (loopl && right_sock != -1){
+				if (loglrpre_fd != -1)
+					write(logrlpre_fd, right_buf, right_n);
+				if (stlrnp_bool)
+					strip_np(right_buf, &right_n);
+				if (stlrnpx_bool)
+					strip_npxeol(right_buf, &right_n);
+				if (loglrpost_fd != -1)
+					write(logrlpost_fd, right_buf, right_n);
+				write(right_sock,right_buf,right_n);
+				wAddnstr(OUT_R,right_buf,right_n);}
+			right_n = 0;
+		}
 	}
 }
 
@@ -743,18 +811,47 @@ void fillbuf(char *buf, char char_in,int *n){
 		mvwaddch(w[IO],wrpos[IO],wcpos[IO],char_in);
 	}
 }
+
 /******************************************************************************************/
-// Functions for networking.
+/* Functions for commands */
 /******************************************************************************************/
+
+/* strips non-pritable chars left to right */
+void strip_np(char *buf,int *n){
+	int j = 0;	
+	int i;
+	for (i = 0; i < *n; i++){
+		if (buf[i] >= 32 && buf[i] < 127)
+			buf[j++] = buf[i];
+	}
+	*n = j;
+}
+
+
+/* strips non_pritable chars left to right except LF and CR */
+void strip_npxeol(char *buf, int *n){
+	int j = 0;
+	int i;
+	for (i = 0; i < *n; i++){
+		if (buf[i] == 10 || buf[i] ==13 ||(buf[i] >= 32 && buf[i] < 127))
+			buf[j++] = buf[i];
+	}
+	*n = j;
+}
+
 /* set up log file from command prompt.*/
 void logset(int *fd, char *file_name[],int arg_count){
-	if (arg_count == 1) 
-		if (!(*fd = open(file_name[arg_count],O_WRONLY)))
-			wAddstr(IO,"Error opening file\n");
+	if (arg_count == 1){ 
+		if (*fd = open(file_name[arg_count],O_WRONLY))
+			wAddstr(IO,"File opened successfully");		
+		else
+			wAddstr(IO,"Error opening file\n");}
 	else
 		wAddstr(IO,"Must specify file name to log to.\n");
 }
-
+/******************************************************************************************/
+// Functions for networking.
+/******************************************************************************************/
 
 /* wrapper for close the removes the socket from inputs and sets sock to -1 */
 void Close(int *sock){
