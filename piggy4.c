@@ -336,6 +336,8 @@ main(int argc,char *argv[])
 	bool stlrnpx_bool = false;
 	bool strlnp_bool = false;
 	bool strlnpx_bool = false;
+	/* script */
+	int script_fd = -1;
 	fd_set inputs_loop = inputs;
 	while (1) {
 		inputs_loop = inputs;
@@ -350,7 +352,7 @@ main(int argc,char *argv[])
 			if ((right_sock = Accept(right_passive_sock,racct_addr,racctport)) != -1)
 				wAddstr(IO,"Piggy established a valid right connection.\n");	
 		
-		/* read input from stdin */
+		/* read input from curses input */
 		char cur_char;
 		halfdelay(20);	
 		if ( (cur_char = wgetch(w[IO])) != ERR){
@@ -458,6 +460,11 @@ main(int argc,char *argv[])
 							closesocket(right_sock);
 							closesocket(left_passive_sock);
 							closesocket(right_passive_sock);
+							/* Close the files */
+							close(loglrpre_fd);
+							close(loglrpost_fd);
+							close(logrlpre_fd);
+							close(logrlpost_fd);
 							/* Put piggy out to paster */
 							endwin();
 							exit(0);}
@@ -636,19 +643,19 @@ main(int argc,char *argv[])
 							else {
 								stlrnp_bool = true;
 								wAddstr(IO, "stlrnp is now set\n");}}
-						else if (strcmp(commands[0],"stlrnpxeol") == 0)
+						else if (strcmp(commands[0],"stlrnpxeol") == 0){
 							if (stlrnpx_bool)
 								wAddstr(IO, "stlrnpxeol is already set\n");
 							else {
 								stlrnpx_bool = true;
 								wAddstr(IO, "stlrnpxeol is now set\n");}}
-						else if (strcmp(commands[0],"strlnp") == 0)
-							if (strlnp)
+						else if (strcmp(commands[0],"strlnp") == 0){
+							if (strlnp_bool)
 								wAddstr(IO,"strlnp is already set\n");
 							else {
 								strlnp_bool = true;
 								wAddstr(IO,"strlnp is now set\n");}}
-						else if (strcmp(commands[0],"strlnpxeol") == 0)
+						else if (strcmp(commands[0],"strlnpxeol") == 0){
 							if (strlnpx_bool)
 								wAddstr(IO,"strlnpxeol is already set\n");
 							else {
@@ -663,15 +670,18 @@ main(int argc,char *argv[])
 					}
 				}
 			}
-		}	
+		}
 		
 		/* read from left side. */	
 		if (FD_ISSET(left_sock,&inputs_loop)){
 			if ((left_n = read(left_sock,left_buf,sizeof(left_buf))) == 0){
 				wAddstr(IO,"Lost connection to left side. \n");	
 				Close(&left_sock);}
-			else // Display input from left to top left corner
+			else { // Display input from left to top left corner
+				if (loglrpre_fd != -1)
+					write(loglrpre_fd, left_buf, left_n);		
 				wAddnstr(IN_L,left_buf,left_n);
+			}
 		}
 		
 		/* read from right side. */
@@ -679,24 +689,28 @@ main(int argc,char *argv[])
 			if ((right_n = read(right_sock, right_buf,sizeof(right_buf))) == 0){
 				wAddstr(IO,"Lost connection to right side. \n");
 				Close(&right_sock);}
-			else // Display input from right to bottom right corner
-				wAddnstr(IN_R,right_buf,right_n);	
+			else{ // Display input from right to bottom right corner
+				if (logrlpre_fd != -1)
+					write(logrlpre_fd, right_buf, right_n);		
+				wAddnstr(IN_R,right_buf,right_n);
+			}	
 		}
 
 		/* Output contents of left and right buffer if data is present */
 		if (left_n != 0){
-			if (!loopr && right_sock != -1){
-				if (loglrpre_fd != -1)
-					write(loglrpre_fd, left_buf,left_n);
-				if (stlrnp_bool)
-					strip_np(left_buf,&left_n);
-				if (stlrnpx_bool)
-					strip_npxeol(left_buf, &left_n);	
-				if (loglrpost_fd != -1)
-					write(loglrpost_fd, left_buf, left_n);
+			/* process strip and post log commands then output to OUT_R */	
+			if (stlrnp_bool)
+				strip_np(left_buf,&left_n);
+			if (stlrnpx_bool)
+				strip_npxeol(left_buf, &left_n);	
+			if (loglrpost_fd != -1)
+				write(loglrpost_fd, left_buf, left_n);
+			wAddnstr(OUT_R,left_buf,left_n);
+			
+			if (!loopr && right_sock != -1)
 				write(right_sock,left_buf,left_n);
-				wAddnstr(OUT_R,left_buf,left_n);}
 			else if (loopr && left_sock != -1){
+				wAddnstr(IN_R,left_buf,left_n);
 				if (logrlpre_fd != -1)
 					write(logrlpre_fd, left_buf, left_n);
 				if (strlnp_bool)
@@ -706,21 +720,22 @@ main(int argc,char *argv[])
 				if (logrlpost_fd != -1)
 					write(logrlpost_fd, left_buf, left_n);
 				write(left_sock,left_buf,left_n);
-				wAddnstr(OUT_L,left_buf,left_n);}
+				wAddnstr(OUT_L,left_buf,left_n);
+			}
 			left_n = 0;
 		}
 		if (right_n != 0){
-			if (!loopl && left_sock != -1){
-				if (logrlpre_fd != -1)
-					write(logrlpre_fd, right_buf, right_n);
-				if (strlnp_bool)
-					strip_np(right_buf, &right_n);
-				if (strlnpx_bool)
-					strip_npxeol(right_buf, &right_n);
-				if (logrlpost_fd != -1)
-					write(logrlpost_fd, right_buf, right_n);
-				write(left_sock,right_buf,right_n);
-				wAddnstr(OUT_L,right_buf,right_n);}
+			/* process strip and post log commands then output to OUT_L */
+			if (strlnp_bool)
+				strip_np(right_buf, &right_n);
+			if (strlnpx_bool)
+				strip_npxeol(right_buf, &right_n);
+			if (logrlpost_fd != -1)
+				write(logrlpost_fd, right_buf, right_n);
+			wAddnstr(OUT_L,right_buf,right_n);
+
+			if (!loopl && left_sock != -1)
+				write(left_sock, right_buf, right_n);
 			else if (loopl && right_sock != -1){
 				if (loglrpre_fd != -1)
 					write(logrlpre_fd, right_buf, right_n);
@@ -731,7 +746,8 @@ main(int argc,char *argv[])
 				if (loglrpost_fd != -1)
 					write(logrlpost_fd, right_buf, right_n);
 				write(right_sock,right_buf,right_n);
-				wAddnstr(OUT_R,right_buf,right_n);}
+				wAddnstr(OUT_R,right_buf,right_n);
+			}
 			right_n = 0;
 		}
 	}
