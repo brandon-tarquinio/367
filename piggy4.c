@@ -617,17 +617,11 @@ main(int argc,char *argv[])
 			else if (strcmp(commands[0],"connectl") == 0){
 				if (left_passive_sock != -1 || left_sock != -1)
 					wAddstr(IO,"Already a left side. Use dropl and try again.\n");
-				else {
+				else if (command_count = 2) {
 					/* Get IP address */
-					if (command_count > 1)
-						lconnect_addr = commands[1];
-					else
-						wAddstr(IO,"Must specify address or host name to connect to.\n");
+					lconnect_addr = commands[1];
 					/* Get port number */	
-					if (command_count = 2)
-						luseport = atoi(commands[2]);
-					else
-						wAddstr(IO,"Must specify port number to connect to.\n");
+					luseport = atoi(commands[2]);
 					/* Create socket */	
 					if ((left_sock = create_client(lconnect_addr, luseport)) != -1){
 						wAddstr(IO,"Piggy has a valid left connection.\n");
@@ -635,31 +629,28 @@ main(int argc,char *argv[])
 					if (left_sock > max_fd)
 						max_fd = left_sock;}
 					else
-						wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");
-				}}
+						wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");}
+				else
+					wAddstr(IO,"connect not made. Please enter in form :connectl addr port#");}
 			else if (strcmp(commands[0],"connectr") == 0){
 				if (right_passive_sock != -1 || right_sock != -1)
 					wAddstr(IO,"Already a right side. Use dropr and try again.\n");
-				else {
+				else if (command_count = 2){
 					/* Get IP address */
-					if (command_count > 1)
-						raddr = commands[1];
-					else
-						wAddstr(IO,"Must specify address or host name to connect to.\n");
+					raddr = commands[1];
 					/* Get port number */	
-					if (command_count > 2)
-						rport = atoi(commands[2]);
-					else
-						wAddstr(IO,"Must specify port number to connect to.\n");
+					rport = atoi(commands[2]);
 					/* Create socket */	
 					if ((right_sock = create_client(raddr, rport)) != -1){
 						wAddstr(IO,"Piggy has a valid right connection.\n");
 						FD_SET(right_sock, &inputs);
-					if (right_sock > max_fd)
-						max_fd = right_sock;}
+						if (right_sock > max_fd)
+							max_fd = right_sock;}
 					else
-						wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");
-				}}
+						wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");}
+				 else 
+					wAddstr(IO,"Connect not made.Please enter in form :connectr addr port.\n");
+				}
 			else if (strcmp(commands[0],"read") == 0){
 				if (command_count = 1){
 					int read_fd = open(commands[1],O_RDONLY);
