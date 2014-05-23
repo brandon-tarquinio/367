@@ -463,9 +463,14 @@ main(int argc,char *argv[])
 		/* if a null terminated string is in stdbuf then output it */
 		if (stdin_n != 0 && output_stdin){
 			if (outputr && right_sock != -1){
+				/* log curses input into prelog */
+				if (loglrpre_fd != -1)
+					write(loglrpre_fd, stdin_buf, stdin_n);
 				write(right_sock,stdin_buf,stdin_n);
 				wAddnstr(OUT_R,stdin_buf,stdin_n);}
 			else if (outputl && left_sock != -1){
+				if (logrlpre_fd != -1)
+					write(logrlpre_fd, stdin_buf, stdin_n);
 				write(left_sock, stdin_buf,stdin_n);
 				wAddnstr(OUT_L,stdin_buf,stdin_n);}
 			else
@@ -710,10 +715,16 @@ main(int argc,char *argv[])
 					strlnpx_bool = true;
 					wAddstr(IO,"strlnpxeol is now set\n");}}
 			else if (strcmp(commands[0],"source") == 0){
-				if (command_count < 1)
-					script_fd = open("scriptin",O_RDONLY);
-				else if (command_count = 1)
-					script_fd = open(commands[1],O_RDONLY);
+				if (command_count < 1){
+					if ((script_fd = open("scriptin",O_RDONLY)) > 0)
+						wAddstr(IO, "running script.\n");
+					else
+						wAddstr(IO, "error opening file");}
+				else if (command_count = 1){
+					if ((script_fd = open(commands[1],O_RDONLY)) > 0)
+						wAddstr(IO, "running script.\n");
+					else
+						wAddstr(IO, "error opening file");}
 				else
 					wAddstr(IO,"Not valid input. :source [scriptin]\n");}
 			else
