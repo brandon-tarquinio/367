@@ -45,7 +45,7 @@ void wClrtoeol(int i);
 void wAddstr(int i, char s[132]);
 
 /* Print buffer from 0 to n into the window w[i]*/
-void wAddnstr(int i, char s[1000],int n);
+void wAddnstr(int i, char *s,int n);
 
 /* fills the buffer from curses getchar starting at spot n + 1 */
 void fillbuf(char *buf,char char_in,int *n);
@@ -654,13 +654,14 @@ main(int argc,char *argv[])
 			else if (strcmp(commands[0],"read") == 0){
 				if (command_count = 1){
 					int read_fd = open(commands[1],O_RDONLY);
-					while ((stdin_n = read(read_fd,stdin_buf,sizeof(stdin_buf))) > 0){
+					while ((stdin_n = read(read_fd,stdin_buf,1000)) > 0){
 						if (outputr && right_sock != -1){
 							write(right_sock,stdin_buf,stdin_n);
-							wAddnstr(OUT_R,stdin_buf,stdin_n);}
+							}
+							//wAddnstr(OUT_R,stdin_buf,stdin_n);
 						else if (outputl && left_sock != -1){
-							write(left_sock, stdin_buf,stdin_n);
-							wAddnstr(OUT_L,stdin_buf,stdin_n);}
+							write(left_sock, stdin_buf,stdin_n);}
+						//	wAddnstr(OUT_L,stdin_buf,stdin_n);}
 					}
 					
 					if (stdin_n < 0)
@@ -829,15 +830,15 @@ void wAddstr(int i, char s[132]){
 }
 
 /* Prints from 0 to n of buffer to window w[i]*/ 
-void wAddnstr(int i, char s[1000],int n){
-	int j,l,y,x;
+void wAddnstr(int i, char *s,int n){
+	int j,y,x;
 	getyx(w[i],y,x);      // find out where we are in the window
   	y=y?y:!y;
   	x=x?x:!x;  
   	wrpos[i]=y;
   	wcpos[i]=x;
 	wClrtoeol(i);
-  	for (j=0;j<n;j++){
+  	for (j=0;j<n - 1;j++){
       		if (++wcpos[i]==ww[i] -1 || s[j] == '\n') {
 	  		wcpos[i]=1;
 	  		if (++wrpos[i]==wh[i] -1){
@@ -851,6 +852,7 @@ void wAddnstr(int i, char s[1000],int n){
 			else {
 				char hex_buf[5];
 				sprintf(hex_buf,"0x%x",s[j]);
+				wAddnstr(i,hex_buf,5);
 			}
     		}
 	}
