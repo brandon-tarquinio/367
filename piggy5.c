@@ -110,7 +110,7 @@ int is_numeric(char *s){
 }
 
 /*------------------------------------------------------------------------
-* Program: piggy4
+* Program: piggy5
 *
 * Purpose: Network middleware where a client can connect to the left side
 * of piggy and piggy can also connect to a server with an address specified
@@ -511,9 +511,9 @@ main(int argc,char *argv[])
 			for(i = 0; i < command_n - 1; i++){
 				if (command_buf[i] == ' '){
 					command_buf[i] = '\0'; // make command i proper
-					if (++command_count > 2){
+					if (++command_count > MAX_COMMAND_COUNT - 2){ // -1 for off-by-one and -1 for space to place null
 						wAddstr(IO,"No valid commands have more than ten args.");
-						//commands[0] = "";
+						commands[0] = ""; // so no commands are activated
 						break;
 					}
 					/* trim extra spaces */
@@ -540,6 +540,11 @@ main(int argc,char *argv[])
 				close(logrlpre_fd);
 				close(logrlpost_fd);
 				close(script_fd);
+				/* Close the pipes */
+				close(write_pipe_lr);
+				close(read_pipe_lr);
+				close(write_pipe_rl);
+				close(read_pipe_rl);
 				/* Put piggy out to paster */
 				endwin();
 				exit(0);}
@@ -613,7 +618,7 @@ main(int argc,char *argv[])
 					wAddstr(IO,"Already a left side. Use dropl and try agian\n");
 				else { 
 					/* If luseport is not set then use protoport value */
-					if (command_count = 1)
+					if (command_count = 2)
 						luseport = atoi(commands[1]);
 					if((left_passive_sock = create_server(luseport)) != -1){	
 						FD_SET(left_passive_sock, &inputs);
@@ -627,7 +632,7 @@ main(int argc,char *argv[])
 					wAddstr(IO,"Already a right side. Use dropr and try agian.\n");
 				else { 
 					/* If port specified use it. else use protoport value */
-					if (command_count = 1)
+					if (command_count = 2)
 						ruseport = atoi(commands[1]);
 					if((right_passive_sock = create_server(ruseport)) != -1){	
 						FD_SET(right_passive_sock, &inputs);
@@ -752,12 +757,13 @@ main(int argc,char *argv[])
 			else if (strcmp(commands[0], "externallr") == 0){
 				if (stlrnpx_bool || stlrnp_bool || exfilter_lr_bool)
 					wAddstr(IO, "A filter from left to right already exists. Only one filter in each direction is permitted");
-				else {
+				else if (command_count){
 					/* Start the external command and set the read and write in of pipe */
-					pOpen(&commands[1],command_count, &write_pipe_lr, &read_pipe_lr);	
+					pOpen(&commands[1],command_count -1, &write_pipe_lr, &read_pipe_lr);	
 					wAddstr(IO,"External filter from left to right has been set");
-					exfilter_lr_bool = true;
-				}}
+					exfilter_lr_bool = true;} 
+				else
+					wAddstr(IO, "Must specify a command to set as filter");}
 			//else if (strcmp(commands[0], "externalrl"){
 				
 			//}
@@ -806,11 +812,19 @@ main(int argc,char *argv[])
 			if (loglrpost_fd != -1)
 				write(loglrpost_fd, left_buf, left_n);
 			/* if externallr was set then pass through external filter */
-				if (exfilter_lr_bool){
-					write(write_pipe_lr,left_buf,left_n);
-					wAddstr(IO,"I am here");
-					left_n = read(read_pipe_lr,left_buf,left_n);
+			if (exfilter_lr_bool){
+				write(write_pipe_lr,left_buf,left_n);
+				wAddstr(IO,"I am here");
+				if ( (left_n = read(read_pipe_lr,left_buf,left_n)) <= 0){
+					close(read_pipe_lr);
+					close(write_pipe_lr);
+					exfilter_lr_bool = false;
+					if (left_n = 0)
+						wAddstr(IO, "External command has finished");
+					else 
+						wAddstr(IO, "An error has occured. Closing filter");
 				}
+			}
 			
 			wAddnstr(OUT_R,left_buf,left_n);
 			if (!loopr && right_sock != -1)
@@ -914,7 +928,7 @@ void wAddnstr(int i, char *s,int n){
 /* fills the buffer from curses getchar starting at spot n + 1 */
 void fillbuf(char *buf, char char_in,int *n){
 	if ( char_in == BACKSPACE){
-		if (n != 0){
+		if (*n > 0){
 			--(*n);
 			mvwaddch(w[IO],wrpos[IO],wcpos[IO],' ');
 			wmove(w[IO],wrpos[IO],wcpos[IO]);
@@ -948,6 +962,10 @@ void pOpen(char **command,int arg_count, int *pipein, int *pipeout){
 	int fds1[2];
 	int fds2[2];
 	pid_t pid;
+	wAddstr(IO, command[0]);
+	char buf[15];
+	sprintf(buf, "arg_count is %d\n", arg_count);
+	wAddnstr(IO, buf,14);
 	/* Create two pipes.
 	File descriptors for the two ends of the pipe are placed in fds.
 	The read end of the pipe is at [0] the write end of the pipe is at [1]
