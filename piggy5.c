@@ -27,6 +27,7 @@ struct protoent *ptrp; /* pointer to a protocol table entry */
 /* For select */
 int max_fd;
 fd_set inputs; /* set of selector to be passed to select */
+fd_set outputs; /* set of selectors to be passed to select for writing */
 
 void sys_err(char *s){
 	printf("%s\n",s);
@@ -362,11 +363,17 @@ main(int argc,char *argv[])
 	bool exfilter_rl_bool = false;
 	int write_pipe_rl;
 	int read_pipe_rl;	
+	int left_n_out = 0;
 	/* script */
 	char cur_char_s; // the current char when processing scripts
 	fd_set inputs_loop = inputs;
+
+	FD_ZERO(&outputs);
+
+	//fd_set outputs_loop = outputs;
 	while (1) {
 		inputs_loop = inputs;
+	//	outputs_loop = outputs;
 		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,&timeout);
 		/* accepts incoming client from left side and assigns to left_sock */	
 		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
@@ -761,7 +768,11 @@ main(int argc,char *argv[])
 					/* Start the external command and set the read and write in of pipe */
 					pOpen(&commands[1],command_count -1, &write_pipe_lr, &read_pipe_lr);	
 					wAddstr(IO,"External filter from left to right has been set");
-					exfilter_lr_bool = true;} 
+					exfilter_lr_bool = true;
+					FD_SET(read_pipe_lr, &inputs);
+						if (read_pipe_lr > max_fd)
+							max_fd = read_pipe_lr;
+					} 
 				else
 					wAddstr(IO, "Must specify a command to set as filter");}
 			//else if (strcmp(commands[0], "externalrl"){
@@ -801,38 +812,48 @@ main(int argc,char *argv[])
 				wAddnstr(IN_R,right_buf,right_n);
 			}	
 		}
-
-		/* Output contents of left and right buffer if data is present */
+		/* read from pipe */
+		if (exfilter_lr_bool && FD_ISSET(read_pipe_lr,&inputs_loop)){
+			if ( (left_n_out = read(read_pipe_lr,left_buf,1000)) <= 0){
+				close(read_pipe_lr);
+				close(write_pipe_lr);
+				exfilter_lr_bool = false;
+				if (left_n_out == 0)
+					wAddstr(IO, "External command has finished");
+				else 
+					wAddstr(IO, "An error has occured. Closing filter");
+			}
+			wAddstr(IO,"I am here");
+		}
+		/* process filters, set left_n = 0 and left_n_out = left_n */
 		if (left_n != 0){
-			/* process strip and post log commands then output to OUT_R */	
-			if (stlrnp_bool)
-				strip_np(left_buf,&left_n);
-			if (stlrnpx_bool)
-				strip_npxeol(left_buf, &left_n);	
-			if (loglrpost_fd != -1)
-				write(loglrpost_fd, left_buf, left_n);
 			/* if externallr was set then pass through external filter */
 			if (exfilter_lr_bool){
 				write(write_pipe_lr,left_buf,left_n);
-				wAddstr(IO,"I am here");
-				if ( (left_n = read(read_pipe_lr,left_buf,left_n)) <= 0){
-					close(read_pipe_lr);
-					close(write_pipe_lr);
-					exfilter_lr_bool = false;
-					if (left_n = 0)
-						wAddstr(IO, "External command has finished");
-					else 
-						wAddstr(IO, "An error has occured. Closing filter");
-				}
+			} else{
+				/* process strip and post log commands then output to OUT_R */	
+				if (stlrnp_bool)
+					strip_np(left_buf,&left_n);
+				if (stlrnpx_bool)
+					strip_npxeol(left_buf, &left_n);
+				left_n_out = left_n;	
 			}
+		
+			left_n = 0;
+				
+		}	
+		/* Output contents of left and right buffer if data is present */
+ 		if (left_n_out != 0){
+			if (loglrpost_fd != -1)
+				write(loglrpost_fd, left_buf, left_n_out);
 			
-			wAddnstr(OUT_R,left_buf,left_n);
+			wAddnstr(OUT_R,left_buf,left_n_out);
 			if (!loopr && right_sock != -1)
-				write(right_sock,left_buf,left_n);
+				write(right_sock,left_buf,left_n_out);
 			else if (loopr && left_sock != -1){
-				wAddnstr(IN_R,left_buf,left_n);
+				wAddnstr(IN_R,left_buf,left_n_out);
 				if (logrlpre_fd != -1)
-					write(logrlpre_fd, left_buf, left_n);
+					write(logrlpre_fd, left_buf, left_n_out);
 				if (strlnp_bool)
 					strip_np(left_buf, &left_n);
 				
@@ -843,7 +864,7 @@ main(int argc,char *argv[])
 				write(left_sock,left_buf,left_n);
 				wAddnstr(OUT_L,left_buf,left_n);
 			}
-			left_n = 0;
+			left_n_out = 0;
 		}
 		if (right_n != 0){
 			/* process strip and post log commands then output to OUT_L */
