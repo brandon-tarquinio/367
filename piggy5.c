@@ -18,6 +18,7 @@
 #include <errno.h>
 
 
+#define MAX_COMMAND_COUNT 13
 #define PROTOPORT 36790 /* default protocol port number */
 #define QLEN 6 /* size of request queue */
 extern int errno;
@@ -51,7 +52,7 @@ static chtype ls,rs,ts,bs,tl,tr,bl,br;
 void wClrtoeol(int i);
 
 /* Add string to window specified by i */
-void wAddstr(int i, char s[132]);
+void wAddstr(int i, char *s);
 
 /* Print buffer from 0 to n into the window w[i]*/
 void wAddnstr(int i, char *s,int n);
@@ -326,12 +327,12 @@ main(int argc,char *argv[])
 	const int stdin_buf_size = 1000;
 	char stdin_buf[stdin_buf_size]; 	/* buffer for insert mode */
 	int stdin_n = 0; 			/* number of characters read in insert mode */
-	const int command_buf_size = 60;	/* constant for size of command buf */
+	const int command_buf_size = 100;	/* constant for size of command buf */
 	char command_buf[command_buf_size];	/* buffer the hold command mode input */	
-	char *commands[3];			/* holds the parsed commands from command_buf */
+	char *commands[MAX_COMMAND_COUNT];	/* holds the parsed commands from command_buf */
 	int command_n = 0;			/* count of chars in command_buf */
 	int command_count;
-	bool command_ready = false;
+	bool command_ready;
 	/* set output defaults */		
 	bool outputr = true;
 	bool outputl = false;
@@ -340,8 +341,8 @@ main(int argc,char *argv[])
 		outputl = true;
 	}
 	/* modes */
-	bool insert = false;
-	bool command = false;
+	bool insert = false;			/* Set to true when in insert mode. Set back to false when esc is hit in insert mode */
+	bool command = false;			/* Set to true when in command mode. Set to false once enter or esc is hit in command mode */
 	bool output_stdin = false;
 	// loglr
 	int loglrpre_fd = -1;
@@ -367,7 +368,6 @@ main(int argc,char *argv[])
 	while (1) {
 		inputs_loop = inputs;
 		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,&timeout);
-
 		/* accepts incoming client from left side and assigns to left_sock */	
 		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
 			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
@@ -506,13 +506,14 @@ main(int argc,char *argv[])
 			for (i = 0; i < 3; i++)
 				commands[i] = NULL;
 
-			/*parse commands from command_buf and place them in commands */
+			/*parse commands from command_buf and place them in commands[] */
 			commands[0] = &command_buf[0];	
 			for(i = 0; i < command_n - 1; i++){
 				if (command_buf[i] == ' '){
 					command_buf[i] = '\0'; // make command i proper
 					if (++command_count > 2){
-						wAddstr(IO,"No valid commands have more than two args.");
+						wAddstr(IO,"No valid commands have more than ten args.");
+						//commands[0] = "";
 						break;
 					}
 					/* trim extra spaces */
@@ -678,11 +679,11 @@ main(int argc,char *argv[])
 					while ((stdin_n = read(read_fd,stdin_buf,1000)) > 0){
 						if (outputr && right_sock != -1){
 							write(right_sock,stdin_buf,stdin_n);
-							
-							wAddnstr(OUT_R,stdin_buf,stdin_n);}
+							}
+							//wAddnstr(OUT_R,stdin_buf,stdin_n);
 						else if (outputl && left_sock != -1){
-							write(left_sock, stdin_buf,stdin_n);
-							wAddnstr(OUT_L,stdin_buf,stdin_n);}
+							write(left_sock, stdin_buf,stdin_n);}
+						//	wAddnstr(OUT_L,stdin_buf,stdin_n);
 					}
 					
 					if (stdin_n < 0)
@@ -706,37 +707,35 @@ main(int argc,char *argv[])
 			else if (strcmp(commands[0],"stlrnp") == 0){
 				if (stlrnp_bool)
 					wAddstr(IO, "stlrnp already set\n");
+				else if (stlrnpx_bool || exfilter_lr_bool)
+					wAddstr(IO, "A filter from left to right already exists. Only one filter in each direction is permitted");
 				else {
 					stlrnp_bool = true;
 					wAddstr(IO, "stlrnp is now set\n");}}
 			else if (strcmp(commands[0],"stlrnpxeol") == 0){
 				if (stlrnpx_bool)
 					wAddstr(IO, "stlrnpxeol is already set\n");
+				else if (stlrnp_bool || exfilter_lr_bool)
+					wAddstr(IO, "A filter from left to right already exists. Only one filter in each direction is permitted");
 				else {
 					stlrnpx_bool = true;
 					wAddstr(IO, "stlrnpxeol is now set\n");}}
 			else if (strcmp(commands[0],"strlnp") == 0){
 				if (strlnp_bool)
 					wAddstr(IO,"strlnp is already set\n");
+				else if (strlnpx_bool || exfilter_rl_bool)
+					wAddstr(IO, "A filter from right to left already exists. Only one filter in each direction is permitted");
 				else {
 					strlnp_bool = true;
 					wAddstr(IO,"strlnp is now set\n");}}
 			else if (strcmp(commands[0],"strlnpxeol") == 0){
 				if (strlnpx_bool)
 					wAddstr(IO,"strlnpxeol is already set\n");
+				else if (strlnp_bool || exfilter_rl_bool)
+					wAddstr(IO, "A filter from right to left already exists. Only one filter in each direction is permitted");
 				else {
 					strlnpx_bool = true;
 					wAddstr(IO,"strlnpxeol is now set\n");}}
-			else if (strcmp(commands[0], "externallr") == 0){
-				if (stlrnpx_bool || stlrnp_bool || exfilter_lr_bool)
-					wAddstr(IO, "A filter from left to right already exists. Only one filter in each direction is permitted");
-				else {
-					/* Start the external command and set the read and write in of pipe */
-					pOpen(&commands[1],command_count, &write_pipe_lr, &read_pipe_lr);	
-					wAddstr(IO,"External filter from left to right has been set");
-					exfilter_lr_bool = true;
-				}}
-
 			else if (strcmp(commands[0],"source") == 0){
 				if (command_count < 1){
 					if ((script_fd = open("scriptin",O_RDONLY)) > 0)
@@ -750,6 +749,18 @@ main(int argc,char *argv[])
 						wAddstr(IO, "error opening file");}
 				else
 					wAddstr(IO,"Not valid input. :source [scriptin]\n");}
+			else if (strcmp(commands[0], "externallr") == 0){
+				if (stlrnpx_bool || stlrnp_bool || exfilter_lr_bool)
+					wAddstr(IO, "A filter from left to right already exists. Only one filter in each direction is permitted");
+				else {
+					/* Start the external command and set the read and write in of pipe */
+					pOpen(&commands[1],command_count, &write_pipe_lr, &read_pipe_lr);	
+					wAddstr(IO,"External filter from left to right has been set");
+					exfilter_lr_bool = true;
+				}}
+			//else if (strcmp(commands[0], "externalrl"){
+				
+			//}
 			else
 				wAddstr(IO,"Not a valid command.\n");
 			/* clean up */	
@@ -794,8 +805,14 @@ main(int argc,char *argv[])
 				strip_npxeol(left_buf, &left_n);	
 			if (loglrpost_fd != -1)
 				write(loglrpost_fd, left_buf, left_n);
-			wAddnstr(OUT_R,left_buf,left_n);
+			/* if externallr was set then pass through external filter */
+				if (exfilter_lr_bool){
+					write(write_pipe_lr,left_buf,left_n);
+					wAddstr(IO,"I am here");
+					left_n = read(read_pipe_lr,left_buf,left_n);
+				}
 			
+			wAddnstr(OUT_R,left_buf,left_n);
 			if (!loopr && right_sock != -1)
 				write(right_sock,left_buf,left_n);
 			else if (loopr && left_sock != -1){
@@ -804,6 +821,7 @@ main(int argc,char *argv[])
 					write(logrlpre_fd, left_buf, left_n);
 				if (strlnp_bool)
 					strip_np(left_buf, &left_n);
+				
 				if (strlnpx_bool)
 					strip_npxeol(left_buf, &left_n);
 				if (logrlpost_fd != -1)
@@ -856,7 +874,7 @@ void wClrtoeol(int i){
 }
 
 /* Prints string to window w[i] */
-void wAddstr(int i, char s[132]){
+void wAddstr(int i, char *s){
 	wAddnstr(i, s, strlen(s));
 }
 
@@ -869,7 +887,8 @@ void wAddnstr(int i, char *s,int n){
   	wrpos[i]=y;
   	wcpos[i]=x;
 	wClrtoeol(i);
-  	for (j=0;j<n - 1;j++){
+  	for (j=0;j<n;j++){
+		/* check if in writable aread */
       		if (++wcpos[i]==ww[i] -1 || s[j] == '\n') {
 	  		wcpos[i]=1;
 	  		if (++wrpos[i]==wh[i] -1){
@@ -877,8 +896,9 @@ void wAddnstr(int i, char *s,int n){
 				wClrtoeol(i);
 			}
 		}
-		else {
-      			if (s[j] >= 32 && s[j] <= 126)
+		/* if not a special character then write to screen */
+      		if (s[j] != '\n'){
+			if (s[j] >= 32 && s[j] <= 126)
 				mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]);
 			else {
 				char hex_buf[5];
