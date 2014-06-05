@@ -16,8 +16,36 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <errno.h>
+// for the queue
+#include <sys/queue.h>
+TAILQ_HEAD(tailhead, entry) head;
+struct tailhead *headp;
+struct entry{
+	char c;
+	TAILQ_ENTRY(entry) entries;
+}; 
+
+void add_to_queue(char ch){
+	struct entry *elem;
+	elem = malloc(sizeof(struct entry));
+	if (elem) {
+		elem->c = ch;
+	}
+	TAILQ_INSERT_HEAD(&head, elem, entries);
+}
+
+char remove_from_queue(){
+	char return_char;
+	if (head.tqh_first != NULL){
+		return_char = head.tqh_first->c;
+		TAILQ_REMOVE(&head, head.tqh_first, entries);
+		return return_char;
+	} else
+		return 0;
+}
 
 
+// other defines and global variables
 #define MAX_COMMAND_COUNT 13
 #define PROTOPORT 36790 /* default protocol port number */
 #define QLEN 6 /* size of request queue */
@@ -145,6 +173,7 @@ main(int argc,char *argv[])
 	int input_ready;
 	struct timeval timeout;
 	timeout.tv_sec = .05;
+	FD_ZERO(&inputs);
 
 	/* loop through arguments and set values */
 	bool no_left  = false; 	/* holds value of command line argument -noleft */
@@ -368,14 +397,16 @@ main(int argc,char *argv[])
 	/* script */
 	char cur_char_s; // the current char when processing scripts
 	fd_set inputs_loop = inputs;
-
 	FD_ZERO(&outputs);
-
-	//fd_set outputs_loop = outputs;
+	fd_set outputs_loop;
+	/* the queue */
+	TAILQ_INIT(&head);
 	while (1) {
 		inputs_loop = inputs;
-	//	outputs_loop = outputs;
-		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,&timeout);
+		if (right_sock != -1 || left_sock != -1 || exfilter_rl_bool || exfilter_lr_bool)	
+			outputs_loop = outputs;
+		input_ready = select(max_fd+1,&inputs_loop,&outputs_loop,NULL,&timeout);
+		
 		/* accepts incoming client from left side and assigns to left_sock */	
 		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
 			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
@@ -1029,10 +1060,6 @@ void pOpen(char **command,int arg_count, int *pipein, int *pipeout){
 	int fds1[2];
 	int fds2[2];
 	pid_t pid;
-	wAddstr(IO, command[0]);
-	char buf[15];
-	sprintf(buf, "arg_count is %d\n", arg_count);
-	wAddnstr(IO, buf,14);
 	/* Create two pipes.
 	File descriptors for the two ends of the pipe are placed in fds.
 	The read end of the pipe is at [0] the write end of the pipe is at [1]
@@ -1240,6 +1267,7 @@ int Accept(int sock_in,char* acct_addr,int acct_port){
 		FD_SET(return_sock,&inputs);
 		if (return_sock > max_fd)
 			max_fd = return_sock;
+		FD_SET(return_sock,&outputs);
 		return return_sock;}
 	else
 		return -1;
