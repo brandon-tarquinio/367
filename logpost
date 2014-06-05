@@ -1,0 +1,532 @@
+/* Add string to window specified by i */
+		if (!(*s >= '0' || *(s++) <= '9'))
+* of piggy and piggy can also connect to a server with an address specified
+* by -raddr option. Alternatively if -noright option is set then piggy will
+* lacct_addr    - specifies what address the server can accept. 
+* raddr    - specifies what address piggy should connect to.
+		if (strcmp(argv[arg_i],"-noleft") == 0)
+		else if (strcmp(argv[arg_i], "-noright") == 0)
+		else if (strcmp(argv[arg_i], "-laddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-raddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-lacctport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-luseport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-rport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-loopr") == 0)
+		else if (strcmp(argv[arg_i], "-loopl") == 0)
+		else if (strcmp(argv[arg_i], "-s") == 0){
+			if (arg_i < (argc - 1) && argv[++arg_i][0] != '-')
+				if (arg_i > 2)
+	if ( ((long int)(ptrp = getprotobyname("tcp"))) == 0) {
+	if (!(LINES==43) || !(COLS==132) ){ 
+	      if (resizeterm(43,132)==ERR){
+	if (luseport == -1)
+	if (!no_left){
+		if((left_passive_sock = create_server(luseport)) != -1){	
+			if (left_passive_sock > max_fd)
+	if (!no_right && raddr != NULL){
+		if (rport == -1)
+		if ((right_sock = create_client(raddr, rport)) != -1){
+			if (right_sock > max_fd)
+	if (no_right){
+		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
+			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
+		if (right_passive_sock != -1 && FD_ISSET(right_passive_sock,&inputs_loop))
+			if ((right_sock = Accept(right_passive_sock,racct_addr,racctport)) != -1)
+		if ( (cur_char = wgetch(w[IO])) != ERR){
+			if (!insert && !command){
+				if ( cur_char == 'i'){
+				else if ( cur_char == ':'){
+			else if (insert){
+				if ( cur_char == 27){
+					if (stdin_buf[stdin_n - 1] == '\n' || stdin_n == stdin_buf_size){
+			else if (command){
+				if ( cur_char == 27){
+					if (command_buf[command_n - 1] == '\n' || command_n == command_buf_size){
+		if (script_fd != -1){
+			if(cur_char_s == ':'){  
+				/* check if bad input */
+				if ((cur_char_s = getChar(script_fd)) == EOF){
+				/* check if insert mode */
+				else if (cur_char_s == 'i'){
+				/* check if command */	
+		/* if a null terminated string is in stdbuf then output it */
+		if (stdin_n != 0 && output_stdin){
+			if (outputr && right_sock != -1){
+				if (loglrpre_fd != -1)
+			else if (outputl && left_sock != -1){
+				if (logrlpre_fd != -1)
+		/* process command if ready */
+		if (command_ready){
+				if (command_buf[i] == ' '){
+					if (++command_count > MAX_COMMAND_COUNT - 2){ // -1 for off-by-one and -1 for space to place null
+					if (i < command_n)
+			/* Check if valid command and process it*/
+			if (strcmp(commands[0],"q") == 0){
+			else if (strcmp(commands[0],"dropl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1){
+			else if (strcmp(commands[0],"dropr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1){
+			else if (strcmp(commands[0],"output") == 0){
+				if (outputr)
+			else if (strcmp(commands[0],"outputl") == 0){
+			else if (strcmp(commands[0],"outputr") == 0){
+			else if (strcmp(commands[0], "lpair") == 0)
+			else if (strcmp(commands[0], "rpair") == 0)
+			else if (strcmp(commands[0],"loopl") == 0){
+			else if (strcmp(commands[0],"loopr") == 0){
+			else if (strcmp(commands[0],"luseport") == 0){
+				if (command_count == 1)
+					wAddstr(IO,"Must specify valid port number after :luseport\n");}
+			else if (strcmp(commands[0],"ruseport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :ruseport\n");}
+			else if (strcmp(commands[0],"lacctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :lacctport\n");}
+			else if (strcmp(commands[0],"racctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :racctport.\n");}
+			else if (strcmp(commands[0],"laccptip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :lacctip\n");}
+			else if (strcmp(commands[0],"racctip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :racctip\n");}
+			else if (strcmp(commands[0],"listenl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1)
+					if (command_count = 2)
+					if((left_passive_sock = create_server(luseport)) != -1){	
+						if (left_passive_sock > max_fd)
+			else if (strcmp(commands[0],"listenr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1)
+					/* If port specified use it. else use protoport value */
+					if (command_count = 2)
+					if((right_passive_sock = create_server(ruseport)) != -1){	
+						if (right_passive_sock > max_fd)
+			else if (st/* Add string to window specified by i */
+		if (!(*s >= '0' || *(s++) <= '9'))
+* of piggy and piggy can also connect to a server with an address specified
+* by -raddr option. Alternatively if -noright option is set then piggy will
+* lacct_addr    - specifies what address the server can accept. 
+* raddr    - specifies what address piggy should connect to.
+		if (strcmp(argv[arg_i],"-noleft") == 0)
+		else if (strcmp(argv[arg_i], "-noright") == 0)
+		else if (strcmp(argv[arg_i], "-laddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-raddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-lacctport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-luseport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-rport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-loopr") == 0)
+		else if (strcmp(argv[arg_i], "-loopl") == 0)
+		else if (strcmp(argv[arg_i], "-s") == 0){
+			if (arg_i < (argc - 1) && argv[++arg_i][0] != '-')
+				if (arg_i > 2)
+	if ( ((long int)(ptrp = getprotobyname("tcp"))) == 0) {
+	if (!(LINES==43) || !(COLS==132) ){ 
+	      if (resizeterm(43,132)==ERR){
+	if (luseport == -1)
+	if (!no_left){
+		if((left_passive_sock = create_server(luseport)) != -1){	
+			if (left_passive_sock > max_fd)
+	if (!no_right && raddr != NULL){
+		if (rport == -1)
+		if ((right_sock = create_client(raddr, rport)) != -1){
+			if (right_sock > max_fd)
+	if (no_right){
+		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
+			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
+		if (right_passive_sock != -1 && FD_ISSET(right_passive_sock,&inputs_loop))
+			if ((right_sock = Accept(right_passive_sock,racct_addr,racctport)) != -1)
+		if ( (cur_char = wgetch(w[IO])) != ERR){
+			if (!insert && !command){
+				if ( cur_char == 'i'){
+				else if ( cur_char == ':'){
+			else if (insert){
+				if ( cur_char == 27){
+					if (stdin_buf[stdin_n - 1] == '\n' || stdin_n == stdin_buf_size){
+			else if (command){
+				if ( cur_char == 27){
+					if (command_buf[command_n - 1] == '\n' || command_n == command_buf_size){
+		if (script_fd != -1){
+			if(cur_char_s == ':'){  
+				/* check if bad input */
+				if ((cur_char_s = getChar(script_fd)) == EOF){
+				/* check if insert mode */
+				else if (cur_char_s == 'i'){
+				/* check if command */	
+		/* if a null terminated string is in stdbuf then output it */
+		if (stdin_n != 0 && output_stdin){
+			if (outputr && right_sock != -1){
+				if (loglrpre_fd != -1)
+			else if (outputl && left_sock != -1){
+				if (logrlpre_fd != -1)
+		/* process command if ready */
+		if (command_ready){
+				if (command_buf[i] == ' '){
+					if (++command_count > MAX_COMMAND_COUNT - 2){ // -1 for off-by-one and -1 for space to place null
+					if (i < command_n)
+			/* Check if valid command and process it*/
+			if (strcmp(commands[0],"q") == 0){
+			else if (strcmp(commands[0],"dropl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1){
+			else if (strcmp(commands[0],"dropr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1){
+			else if (strcmp(commands[0],"output") == 0){
+				if (outputr)
+			else if (strcmp(commands[0],"outputl") == 0){
+			else if (strcmp(commands[0],"outputr") == 0){
+			else if (strcmp(commands[0], "lpair") == 0)
+			else if (strcmp(commands[0], "rpair") == 0)
+			else if (strcmp(commands[0],"loopl") == 0){
+			else if (strcmp(commands[0],"loopr") == 0){
+			else if (strcmp(commands[0],"luseport") == 0){
+				if (command_count == 1)
+					wAddstr(IO,"Must specify valid port number after :luseport\n");}
+			else if (strcmp(commands[0],"ruseport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :ruseport\n");}
+			else if (strcmp(commands[0],"lacctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :lacctport\n");}
+			else if (strcmp(commands[0],"racctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :racctport.\n");}
+			else if (strcmp(commands[0],"laccptip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :lacctip\n");}
+			else if (strcmp(commands[0],"racctip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :racctip\n");}
+			else if (strcmp(commands[0],"listenl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1)
+					if (command_count = 2)
+					if((left_passive_sock = create_server(luseport)) != -1){	
+						if (left_passive_sock > max_fd)
+			else if (strcmp(commands[0],"listenr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1)
+					/* If port specified use it. else use protoport value */
+					if (command_count = 2)
+					if((right_passive_sock = create_server(ruseport)) != -1){	
+						if (right_passive_sock > max_fd)
+			else if (st/* Add string to window specified by i */
+		if (!(*s >= '0' || *(s++) <= '9'))
+* of piggy and piggy can also connect to a server with an address specified
+* by -raddr option. Alternatively if -noright option is set then piggy will
+* lacct_addr    - specifies what address the server can accept. 
+* raddr    - specifies what address piggy should connect to.
+		if (strcmp(argv[arg_i],"-noleft") == 0)
+		else if (strcmp(argv[arg_i], "-noright") == 0)
+		else if (strcmp(argv[arg_i], "-laddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-raddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-lacctport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-luseport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-rport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-loopr") == 0)
+		else if (strcmp(argv[arg_i], "-loopl") == 0)
+		else if (strcmp(argv[arg_i], "-s") == 0){
+			if (arg_i < (argc - 1) && argv[++arg_i][0] != '-')
+				if (arg_i > 2)
+	if ( ((long int)(ptrp = getprotobyname("tcp"))) == 0) {
+	if (!(LINES==43) || !(COLS==132) ){ 
+	      if (resizeterm(43,132)==ERR){
+	if (luseport == -1)
+	if (!no_left){
+		if((left_passive_sock = create_server(luseport)) != -1){	
+			if (left_passive_sock > max_fd)
+	if (!no_right && raddr != NULL){
+		if (rport == -1)
+		if ((right_sock = create_client(raddr, rport)) != -1){
+			if (right_sock > max_fd)
+	if (no_right){
+		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
+			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
+		if (right_passive_sock != -1 && FD_ISSET(right_passive_sock,&inputs_loop))
+			if ((right_sock = Accept(right_passive_sock,racct_addr,racctport)) != -1)
+		if ( (cur_char = wgetch(w[IO])) != ERR){
+			if (!insert && !command){
+				if ( cur_char == 'i'){
+				else if ( cur_char == ':'){
+			else if (insert){
+				if ( cur_char == 27){
+					if (stdin_buf[stdin_n - 1] == '\n' || stdin_n == stdin_buf_size){
+			else if (command){
+				if ( cur_char == 27){
+					if (command_buf[command_n - 1] == '\n' || command_n == command_buf_size){
+		if (script_fd != -1){
+			if(cur_char_s == ':'){  
+				/* check if bad input */
+				if ((cur_char_s = getChar(script_fd)) == EOF){
+				/* check if insert mode */
+				else if (cur_char_s == 'i'){
+				/* check if command */	
+		/* if a null terminated string is in stdbuf then output it */
+		if (stdin_n != 0 && output_stdin){
+			if (outputr && right_sock != -1){
+				if (loglrpre_fd != -1)
+			else if (outputl && left_sock != -1){
+				if (logrlpre_fd != -1)
+		/* process command if ready */
+		if (command_ready){
+				if (command_buf[i] == ' '){
+					if (++command_count > MAX_COMMAND_COUNT - 2){ // -1 for off-by-one and -1 for space to place null
+					if (i < command_n)
+			/* Check if valid command and process it*/
+			if (strcmp(commands[0],"q") == 0){
+			else if (strcmp(commands[0],"dropl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1){
+			else if (strcmp(commands[0],"dropr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1){
+			else if (strcmp(commands[0],"output") == 0){
+				if (outputr)
+			else if (strcmp(commands[0],"outputl") == 0){
+			else if (strcmp(commands[0],"outputr") == 0){
+			else if (strcmp(commands[0], "lpair") == 0)
+			else if (strcmp(commands[0], "rpair") == 0)
+			else if (strcmp(commands[0],"loopl") == 0){
+			else if (strcmp(commands[0],"loopr") == 0){
+			else if (strcmp(commands[0],"luseport") == 0){
+				if (command_count == 1)
+					wAddstr(IO,"Must specify valid port number after :luseport\n");}
+			else if (strcmp(commands[0],"ruseport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :ruseport\n");}
+			else if (strcmp(commands[0],"lacctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :lacctport\n");}
+			else if (strcmp(commands[0],"racctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :racctport.\n");}
+			else if (strcmp(commands[0],"laccptip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :lacctip\n");}
+			else if (strcmp(commands[0],"racctip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :racctip\n");}
+			else if (strcmp(commands[0],"listenl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1)
+					if (command_count = 2)
+					if((left_passive_sock = create_server(luseport)) != -1){	
+						if (left_passive_sock > max_fd)
+			else if (strcmp(commands[0],"listenr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1)
+					/* If port specified use it. else use protoport value */
+					if (command_count = 2)
+					if((right_passive_sock = create_server(ruseport)) != -1){	
+						if (right_passive_sock > max_fd)
+			else if (st/* Add string to window specified by i */
+		if (!(*s >= '0' || *(s++) <= '9'))
+* of piggy and piggy can also connect to a server with an address specified
+* by -raddr option. Alternatively if -noright option is set then piggy will
+* lacct_addr    - specifies what address the server can accept. 
+* raddr    - specifies what address piggy should connect to.
+		if (strcmp(argv[arg_i],"-noleft") == 0)
+		else if (strcmp(argv[arg_i], "-noright") == 0)
+		else if (strcmp(argv[arg_i], "-laddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-raddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-lacctport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-luseport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-rport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-loopr") == 0)
+		else if (strcmp(argv[arg_i], "-loopl") == 0)
+		else if (strcmp(argv[arg_i], "-s") == 0){
+			if (arg_i < (argc - 1) && argv[++arg_i][0] != '-')
+				if (arg_i > 2)
+	if ( ((long int)(ptrp = getprotobyname("tcp"))) == 0) {
+	if (!(LINES==43) || !(COLS==132) ){ 
+	      if (resizeterm(43,132)==ERR){
+	if (luseport == -1)
+	if (!no_left){
+		if((left_passive_sock = create_server(luseport)) != -1){	
+			if (left_passive_sock > max_fd)
+	if (!no_right && raddr != NULL){
+		if (rport == -1)
+		if ((right_sock = create_client(raddr, rport)) != -1){
+			if (right_sock > max_fd)
+	if (no_right){
+		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
+			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
+		if (right_passive_sock != -1 && FD_ISSET(right_passive_sock,&inputs_loop))
+			if ((right_sock = Accept(right_passive_sock,racct_addr,racctport)) != -1)
+		if ( (cur_char = wgetch(w[IO])) != ERR){
+			if (!insert && !command){
+				if ( cur_char == 'i'){
+				else if ( cur_char == ':'){
+			else if (insert){
+				if ( cur_char == 27){
+					if (stdin_buf[stdin_n - 1] == '\n' || stdin_n == stdin_buf_size){
+			else if (command){
+				if ( cur_char == 27){
+					if (command_buf[command_n - 1] == '\n' || command_n == command_buf_size){
+		if (script_fd != -1){
+			if(cur_char_s == ':'){  
+				/* check if bad input */
+				if ((cur_char_s = getChar(script_fd)) == EOF){
+				/* check if insert mode */
+				else if (cur_char_s == 'i'){
+				/* check if command */	
+		/* if a null terminated string is in stdbuf then output it */
+		if (stdin_n != 0 && output_stdin){
+			if (outputr && right_sock != -1){
+				if (loglrpre_fd != -1)
+			else if (outputl && left_sock != -1){
+				if (logrlpre_fd != -1)
+		/* process command if ready */
+		if (command_ready){
+				if (command_buf[i] == ' '){
+					if (++command_count > MAX_COMMAND_COUNT - 2){ // -1 for off-by-one and -1 for space to place null
+					if (i < command_n)
+			/* Check if valid command and process it*/
+			if (strcmp(commands[0],"q") == 0){
+			else if (strcmp(commands[0],"dropl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1){
+			else if (strcmp(commands[0],"dropr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1){
+			else if (strcmp(commands[0],"output") == 0){
+				if (outputr)
+			else if (strcmp(commands[0],"outputl") == 0){
+			else if (strcmp(commands[0],"outputr") == 0){
+			else if (strcmp(commands[0], "lpair") == 0)
+			else if (strcmp(commands[0], "rpair") == 0)
+			else if (strcmp(commands[0],"loopl") == 0){
+			else if (strcmp(commands[0],"loopr") == 0){
+			else if (strcmp(commands[0],"luseport") == 0){
+				if (command_count == 1)
+					wAddstr(IO,"Must specify valid port number after :luseport\n");}
+			else if (strcmp(commands[0],"ruseport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :ruseport\n");}
+			else if (strcmp(commands[0],"lacctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :lacctport\n");}
+			else if (strcmp(commands[0],"racctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :racctport.\n");}
+			else if (strcmp(commands[0],"laccptip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :lacctip\n");}
+			else if (strcmp(commands[0],"racctip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :racctip\n");}
+			else if (strcmp(commands[0],"listenl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1)
+					if (command_count = 2)
+					if((left_passive_sock = create_server(luseport)) != -1){	
+						if (left_passive_sock > max_fd)
+			else if (strcmp(commands[0],"listenr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1)
+					/* If port specified use it. else use protoport value */
+					if (command_count = 2)
+					if((right_passive_sock = create_server(ruseport)) != -1){	
+						if (right_passive_sock > max_fd)
+			else if (st/* Add string to window specified by i */
+		if (!(*s >= '0' || *(s++) <= '9'))
+* of piggy and piggy can also connect to a server with an address specified
+* by -raddr option. Alternatively if -noright option is set then piggy will
+* lacct_addr    - specifies what address the server can accept. 
+* raddr    - specifies what address piggy should connect to.
+		if (strcmp(argv[arg_i],"-noleft") == 0)
+		else if (strcmp(argv[arg_i], "-noright") == 0)
+		else if (strcmp(argv[arg_i], "-laddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-raddr") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-lacctport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-luseport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-rport") == 0 && (arg_i + 1) < argc)
+		else if (strcmp(argv[arg_i], "-loopr") == 0)
+		else if (strcmp(argv[arg_i], "-loopl") == 0)
+		else if (strcmp(argv[arg_i], "-s") == 0){
+			if (arg_i < (argc - 1) && argv[++arg_i][0] != '-')
+				if (arg_i > 2)
+	if ( ((long int)(ptrp = getprotobyname("tcp"))) == 0) {
+	if (!(LINES==43) || !(COLS==132) ){ 
+	      if (resizeterm(43,132)==ERR){
+	if (luseport == -1)
+	if (!no_left){
+		if((left_passive_sock = create_server(luseport)) != -1){	
+			if (left_passive_sock > max_fd)
+	if (!no_right && raddr != NULL){
+		if (rport == -1)
+		if ((right_sock = create_client(raddr, rport)) != -1){
+			if (right_sock > max_fd)
+	if (no_right){
+		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
+			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
+		if (right_passive_sock != -1 && FD_ISSET(right_passive_sock,&inputs_loop))
+			if ((right_sock = Accept(right_passive_sock,racct_addr,racctport)) != -1)
+		if ( (cur_char = wgetch(w[IO])) != ERR){
+			if (!insert && !command){
+				if ( cur_char == 'i'){
+				else if ( cur_char == ':'){
+			else if (insert){
+				if ( cur_char == 27){
+					if (stdin_buf[stdin_n - 1] == '\n' || stdin_n == stdin_buf_size){
+			else if (command){
+				if ( cur_char == 27){
+					if (command_buf[command_n - 1] == '\n' || command_n == command_buf_size){
+		if (script_fd != -1){
+			if(cur_char_s == ':'){  
+				/* check if bad input */
+				if ((cur_char_s = getChar(script_fd)) == EOF){
+				/* check if insert mode */
+				else if (cur_char_s == 'i'){
+				/* check if command */	
+		/* if a null terminated string is in stdbuf then output it */
+		if (stdin_n != 0 && output_stdin){
+			if (outputr && right_sock != -1){
+				if (loglrpre_fd != -1)
+			else if (outputl && left_sock != -1){
+				if (logrlpre_fd != -1)
+		/* process command if ready */
+		if (command_ready){
+				if (command_buf[i] == ' '){
+					if (++command_count > MAX_COMMAND_COUNT - 2){ // -1 for off-by-one and -1 for space to place null
+					if (i < command_n)
+			/* Check if valid command and process it*/
+			if (strcmp(commands[0],"q") == 0){
+			else if (strcmp(commands[0],"dropl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1){
+			else if (strcmp(commands[0],"dropr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1){
+			else if (strcmp(commands[0],"output") == 0){
+				if (outputr)
+			else if (strcmp(commands[0],"outputl") == 0){
+			else if (strcmp(commands[0],"outputr") == 0){
+			else if (strcmp(commands[0], "lpair") == 0)
+			else if (strcmp(commands[0], "rpair") == 0)
+			else if (strcmp(commands[0],"loopl") == 0){
+			else if (strcmp(commands[0],"loopr") == 0){
+			else if (strcmp(commands[0],"luseport") == 0){
+				if (command_count == 1)
+					wAddstr(IO,"Must specify valid port number after :luseport\n");}
+			else if (strcmp(commands[0],"ruseport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :ruseport\n");}
+			else if (strcmp(commands[0],"lacctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :lacctport\n");}
+			else if (strcmp(commands[0],"racctport") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid port number after :racctport.\n");}
+			else if (strcmp(commands[0],"laccptip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :lacctip\n");}
+			else if (strcmp(commands[0],"racctip") == 0){
+				if (command_count = 1)
+					wAddstr(IO,"Must specify valid IP number after :racctip\n");}
+			else if (strcmp(commands[0],"listenl") == 0){
+				if (left_passive_sock != -1 || left_sock != -1)
+					if (command_count = 2)
+					if((left_passive_sock = create_server(luseport)) != -1){	
+						if (left_passive_sock > max_fd)
+			else if (strcmp(commands[0],"listenr") == 0){
+				if (right_passive_sock != -1 || right_sock != -1)
+					/* If port specified use it. else use protoport value */
+					if (command_count = 2)
+					if((right_passive_sock = create_server(ruseport)) != -1){	
+						if (right_passive_sock > max_fd)
+			else if (st/* Add string to window specified by i */
+		if (!(*s >= '0' || *(s++) <= '9'))
+* of piggy and piggy can also connect to a server with an address specified
+* by -raddr option. Alternatively if -noright option is set then piggy will
+* lacct_addr    - specifies what address the server can accept. 
+* raddr    - specifies what address piggy should connect to.
+		if (strcmp(argv[arg_i]

@@ -1,0 +1,7 @@
+:loopr
+:loglrpre log.txt
+:strlnp 
+:loglrpost log2.txt
+:i Here is some sample text for this shit
+:lpair
+
