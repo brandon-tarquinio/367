@@ -144,7 +144,7 @@ main(int argc,char *argv[])
 	/* setup for select */
 	int input_ready;
 	struct timeval timeout;
-	timeout.tv_sec = .5;
+	timeout.tv_sec = .05;
 
 	/* loop through arguments and set values */
 	bool no_left  = false; 	/* holds value of command line argument -noleft */
@@ -364,6 +364,7 @@ main(int argc,char *argv[])
 	int write_pipe_rl;
 	int read_pipe_rl;	
 	int left_n_out = 0;
+	int right_n_out = 0;
 	/* script */
 	char cur_char_s; // the current char when processing scripts
 	fd_set inputs_loop = inputs;
@@ -691,11 +692,10 @@ main(int argc,char *argv[])
 					while ((stdin_n = read(read_fd,stdin_buf,1000)) > 0){
 						if (outputr && right_sock != -1){
 							write(right_sock,stdin_buf,stdin_n);
-							}
-							//wAddnstr(OUT_R,stdin_buf,stdin_n);
+							wAddnstr(OUT_R,stdin_buf,stdin_n);}
 						else if (outputl && left_sock != -1){
-							write(left_sock, stdin_buf,stdin_n);}
-						//	wAddnstr(OUT_L,stdin_buf,stdin_n);
+							write(left_sock, stdin_buf,stdin_n);
+							wAddnstr(OUT_L,stdin_buf,stdin_n);}
 					}
 					
 					if (stdin_n < 0)
@@ -775,9 +775,20 @@ main(int argc,char *argv[])
 					} 
 				else
 					wAddstr(IO, "Must specify a command to set as filter");}
-			//else if (strcmp(commands[0], "externalrl"){
-				
-			//}
+			else if (strcmp(commands[0], "externalrl") == 0){
+				if (strlnpx_bool || strlnp_bool || exfilter_rl_bool)
+					wAddstr(IO, "A filter from right to left already exists. Only one filter in each direction is permitted");
+				else if (command_count){
+					/* Start the external command and set the read and write in of pipe */
+					pOpen(&commands[1],command_count -1, &write_pipe_rl, &read_pipe_rl);	
+					wAddstr(IO,"External filter from right to left has been set");
+					exfilter_rl_bool = true;
+					FD_SET(read_pipe_rl, &inputs);
+						if (read_pipe_rl > max_fd)
+							max_fd = read_pipe_rl;
+					} 
+				else
+					wAddstr(IO, "Must specify a command to set as filter");}
 			else
 				wAddstr(IO,"Not a valid command.\n");
 			/* clean up */	
@@ -794,6 +805,8 @@ main(int argc,char *argv[])
 			if ((left_n = read(left_sock,left_buf,sizeof(left_buf))) == 0){
 				wAddstr(IO,"Lost connection to left side. \n");	
 				Close(&left_sock);}
+			else if (left_n < 0)
+				wAddstr(IO, "Error reading from left socket");
 			else { // Display input from left to top left corner
 				if (loglrpre_fd != -1)
 					write(loglrpre_fd, left_buf, left_n);		
@@ -812,7 +825,8 @@ main(int argc,char *argv[])
 				wAddnstr(IN_R,right_buf,right_n);
 			}	
 		}
-		/* read from pipe */
+
+		/* read from left pipe */
 		if (exfilter_lr_bool && FD_ISSET(read_pipe_lr,&inputs_loop)){
 			if ( (left_n_out = read(read_pipe_lr,left_buf,1000)) <= 0){
 				close(read_pipe_lr);
@@ -823,9 +837,22 @@ main(int argc,char *argv[])
 				else 
 					wAddstr(IO, "An error has occured. Closing filter");
 			}
-			wAddstr(IO,"I am here");
 		}
-		/* process filters, set left_n = 0 and left_n_out = left_n */
+
+		/* read from right pipe */
+		if (exfilter_rl_bool && FD_ISSET(read_pipe_rl,&inputs_loop)){
+			if ( (right_n_out = read(read_pipe_rl,right_buf,1000)) <= 0){
+				close(read_pipe_rl);
+				close(write_pipe_rl);
+				exfilter_rl_bool = false;
+				if (right_n_out == 0)
+					wAddstr(IO, "External command has finished");
+				else 
+					wAddstr(IO, "An error has occured. Closing filter");
+			}
+		}
+
+		/* process filters from left and sets left_n_out to left_n if data can be sent or zero if data must be read from the pipe  */
 		if (left_n != 0){
 			/* if externallr was set then pass through external filter */
 			if (exfilter_lr_bool){
@@ -836,12 +863,31 @@ main(int argc,char *argv[])
 					strip_np(left_buf,&left_n);
 				if (stlrnpx_bool)
 					strip_npxeol(left_buf, &left_n);
-				left_n_out = left_n;	
+				left_n_out = left_n;// signals that data is ready to leave from the left	
 			}
 		
 			left_n = 0;
 				
 		}	
+		
+		/* process filters from right and sets right_n_out to right_n if data can be sent or zero if data must be read from the pipe  */
+		if (right_n != 0){
+			/* if externalrl was set then pass through external filter */
+			if (exfilter_rl_bool){
+				write(write_pipe_rl,right_buf,right_n);
+			} else{
+				/* process strip and post log commands then output to OUT_R */	
+				if (strlnp_bool)
+					strip_np(left_buf,&right_n);
+				if (strlnpx_bool)
+					strip_npxeol(left_buf, &right_n);
+				right_n_out = right_n;// signals that data is ready to leave from the right
+			}
+		
+			right_n = 0;
+				
+		}
+
 		/* Output contents of left and right buffer if data is present */
  		if (left_n_out != 0){
 			if (loglrpost_fd != -1)
@@ -855,42 +901,42 @@ main(int argc,char *argv[])
 				if (logrlpre_fd != -1)
 					write(logrlpre_fd, left_buf, left_n_out);
 				if (strlnp_bool)
-					strip_np(left_buf, &left_n);
+					strip_np(left_buf, &left_n_out);
 				
 				if (strlnpx_bool)
-					strip_npxeol(left_buf, &left_n);
+					strip_npxeol(left_buf, &left_n_out);
 				if (logrlpost_fd != -1)
-					write(logrlpost_fd, left_buf, left_n);
-				write(left_sock,left_buf,left_n);
-				wAddnstr(OUT_L,left_buf,left_n);
+					write(logrlpost_fd, left_buf, left_n_out);
+				write(left_sock,left_buf,left_n_out);
+				wAddnstr(OUT_L,left_buf,left_n_out);
 			}
 			left_n_out = 0;
 		}
-		if (right_n != 0){
+		if (right_n_out != 0){
 			/* process strip and post log commands then output to OUT_L */
 			if (strlnp_bool)
-				strip_np(right_buf, &right_n);
+				strip_np(right_buf, &right_n_out);
 			if (strlnpx_bool)
-				strip_npxeol(right_buf, &right_n);
+				strip_npxeol(right_buf, &right_n_out);
 			if (logrlpost_fd != -1)
-				write(logrlpost_fd, right_buf, right_n);
-			wAddnstr(OUT_L,right_buf,right_n);
+				write(logrlpost_fd, right_buf, right_n_out);
+			wAddnstr(OUT_L,right_buf,right_n_out);
 
 			if (!loopl && left_sock != -1)
-				write(left_sock, right_buf, right_n);
+				write(left_sock, right_buf, right_n_out);
 			else if (loopl && right_sock != -1){
 				if (loglrpre_fd != -1)
-					write(logrlpre_fd, right_buf, right_n);
+					write(logrlpre_fd, right_buf, right_n_out);
 				if (stlrnp_bool)
-					strip_np(right_buf, &right_n);
+					strip_np(right_buf, &right_n_out);
 				if (stlrnpx_bool)
-					strip_npxeol(right_buf, &right_n);
+					strip_npxeol(right_buf, &right_n_out);
 				if (loglrpost_fd != -1)
-					write(logrlpost_fd, right_buf, right_n);
-				write(right_sock,right_buf,right_n);
-				wAddnstr(OUT_R,right_buf,right_n);
+					write(logrlpost_fd, right_buf, right_n_out);
+				write(right_sock,right_buf,right_n_out);
+				wAddnstr(OUT_R,right_buf,right_n_out);
 			}
-			right_n = 0;
+			right_n_out = 0;
 		}
 	}
 }
@@ -938,7 +984,7 @@ void wAddnstr(int i, char *s,int n){
 			else {
 				char hex_buf[5];
 				sprintf(hex_buf,"0x%x",s[j]);
-				wAddnstr(i,hex_buf,5);
+				//wAddnstr(i,hex_buf,5);
 			}
     		}
 	}
