@@ -386,22 +386,24 @@ main(int argc,char *argv[])
 	while (1) {
 		/* refresh inputs fd_set */
 		inputs_loop = inputs;
-		struct timeval timeout;
-		timeout.tv_sec = .05;
-	
+
 		/* refresh outputs fd_set */
-		if (right_sock != -1 || left_sock != -1 || exfilter_rl_bool || exfilter_lr_bool){	
-			FD_ZERO(&outputs_loop);
-			if (right_sock > 0)
-				FD_SET(right_sock, &outputs_loop);
-			if (left_sock > 0)
-				FD_SET(left_sock, &outputs_loop);
-			if (exfilter_rl_bool)
-				FD_SET(write_pipe_rl,&outputs_loop);
-			if (exfilter_lr_bool)
-				FD_SET(write_pipe_lr,&outputs_loop);
-		}
-		input_ready = select(max_fd+1,&inputs_loop,&outputs_loop,NULL,&timeout);
+		FD_ZERO(&outputs_loop);
+                if (right_sock != -1)
+                        FD_SET(right_sock, &outputs_loop);
+                if (left_sock != -1)
+                        FD_SET(left_sock, &outputs_loop);
+               	if (exfilter_rl_bool)
+			FD_SET(write_pipe_rl, &outputs_loop);
+		if (exfilter_lr_bool)
+			FD_SET(write_pipe_lr, &outputs_loop);
+ 
+                struct timeval timeout = {0,0}; 
+                if ( input_ready = select(max_fd+1,&inputs_loop,&outputs_loop,NULL,&timeout) < 0){
+                        wAddstr(IO, "error in select call");
+                        continue;
+                }
+
 
 		/* accepts incoming client from left side and assigns to left_sock */	
 		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
