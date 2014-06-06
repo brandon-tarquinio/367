@@ -1015,7 +1015,7 @@ void wAddnstr(int i, char *s,int n){
   	wrpos[i]=y;
   	wcpos[i]=x;
 	wClrtoeol(i);
-  	for (j=0;j<n && s[j] != 0;j++){
+  	for (j=0;j<n ;j++){
 		/* check if in writable aread */
       		if (++wcpos[i]==ww[i] -1 || s[j] == '\n') {
 	  		wcpos[i]=1;
@@ -1029,9 +1029,12 @@ void wAddnstr(int i, char *s,int n){
 			if (s[j] >= 32 && s[j] <= 126)
 				mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]);
 			else {
-				char hex_buf[13];
-				sprintf(hex_buf,"0x%x",s[j]);
-				wAddnstr(i, hex_buf, 12);
+				char hex_buf[5];
+				snprintf(hex_buf,5,"0x%x",(char)s[j]);
+				if ((char)s[j] > 15)
+					wAddnstr(i, hex_buf, 4);
+				else
+					wAddnstr(i, hex_buf, 3);
 			}
     		}
 	}
