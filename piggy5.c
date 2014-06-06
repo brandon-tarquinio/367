@@ -28,7 +28,6 @@ struct protoent *ptrp; /* pointer to a protocol table entry */
 /* For select */
 int max_fd;
 fd_set inputs; /* set of selector to be passed to select */
-fd_set outputs; /* set of selectors to be passed to select for writing */
 #define max(x,y) ((x) > (y) ? (x) : (y))
 void sys_err(char *s){
 	printf("%s\n",s);
@@ -151,8 +150,6 @@ main(int argc,char *argv[])
 {
 	/* setup for select */
 	int input_ready;
-	struct timeval timeout;
-	timeout.tv_sec = .05;
 	FD_ZERO(&inputs);
 
 	/* loop through arguments and set values */
@@ -209,7 +206,7 @@ main(int argc,char *argv[])
 // Set up ncurses
 /************************************************************************************************************************************/
 
-	int i,j,a,b,c,d,nch; 
+	int i,j,a,b,c,d; 
   	chtype ch;
   	char response[132];
   	ch=(chtype) " ";
@@ -297,8 +294,7 @@ main(int argc,char *argv[])
 	if (!no_left){
 		if((left_passive_sock = create_server(luseport)) != -1){	
 			FD_SET(left_passive_sock, &inputs);
-			if (left_passive_sock > max_fd)
-				max_fd = left_passive_sock;}
+			max_fd = max(max_fd ,left_passive_sock);}
 		else
 			wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");
 		
@@ -314,8 +310,7 @@ main(int argc,char *argv[])
 		if ((right_sock = create_client(raddr, rport)) != -1){
 			wAddstr(IO,"Piggy has a valid right connection.\n");
 			FD_SET(right_sock, &inputs);
-			if (right_sock > max_fd)
-				max_fd = right_sock;}
+			max_fd = max(max_fd, right_sock);}
 		else
 			wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");
 	}
@@ -376,24 +371,36 @@ main(int argc,char *argv[])
 	/* script */
 	char cur_char_s; // the current char when processing scripts
 	fd_set inputs_loop = inputs;
-	FD_ZERO(&outputs);
 	fd_set outputs_loop;
 	/* output buffers */
 	char left_write_buf[BUF_SIZE];	/* buffer for input waiting to be sent to left_sock */
 	int left_write_n = 0;		/* number of bytes in left_write_n */
 	int right_write_n = 0;		/* number of bytes in right_write_n */
 	char right_write_buf[BUF_SIZE];	/* buffer for input waiting to be sent to right_sock */
+	char pipe_lr_buf[BUF_SIZE];	/* buffer for input waiting to be sent to lr pipe */
+	int pipe_lr_n = 0;		/* number of bytes in pipe_lr_buf */
+	char pipe_rl_buf[BUF_SIZE];	/* buffer for input waiting to be sent to rl pipe */
+	int pipe_rl_n = 0;		/* number of bytes in pipe_rl_buf */
 	while (1) {
+		/* refresh inputs fd_set */
 		inputs_loop = inputs;
+		struct timeval timeout;
+		timeout.tv_sec = .05;
+	
+		/* refresh outputs fd_set */
 		if (right_sock != -1 || left_sock != -1 || exfilter_rl_bool || exfilter_lr_bool){	
 			FD_ZERO(&outputs_loop);
 			if (right_sock > 0)
 				FD_SET(right_sock, &outputs_loop);
 			if (left_sock > 0)
-				FD_SET(left_sock, &outputs_loop);}
-
+				FD_SET(left_sock, &outputs_loop);
+			if (exfilter_rl_bool)
+				FD_SET(write_pipe_rl,&outputs_loop);
+			if (exfilter_lr_bool)
+				FD_SET(write_pipe_lr,&outputs_loop);
+		}
 		input_ready = select(max_fd+1,&inputs_loop,&outputs_loop,NULL,&timeout);
-		
+
 		/* accepts incoming client from left side and assigns to left_sock */	
 		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
 			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
@@ -529,7 +536,7 @@ main(int argc,char *argv[])
 		/* process command if ready */
 		if (command_ready){
 			command_count = 0;
-			for (i = 0; i < 3; i++)
+			for (i = 0; i < MAX_COMMAND_COUNT; i++)
 				commands[i] = NULL;
 
 			/*parse commands from command_buf and place them in commands[] */
@@ -552,7 +559,6 @@ main(int argc,char *argv[])
 				}
 			}
 			command_buf[i] = 0;
-
 			/* Check if valid command and process it*/
 			if (strcmp(commands[0],"q") == 0){
 				/* Close the sockets. */	
@@ -615,27 +621,27 @@ main(int argc,char *argv[])
 				else
 					wAddstr(IO,"Must specify valid port number after :luseport\n");}
 			else if (strcmp(commands[0],"ruseport") == 0){
-				if (command_count = 1)
+				if (command_count == 1)
 					ruseport = atoi(commands[1]);
 				else
 					wAddstr(IO,"Must specify valid port number after :ruseport\n");}
 			else if (strcmp(commands[0],"lacctport") == 0){
-				if (command_count = 1)
+				if (command_count == 1)
 					lacctport = atoi(commands[1]);
 				else
 					wAddstr(IO,"Must specify valid port number after :lacctport\n");}
 			else if (strcmp(commands[0],"racctport") == 0){
-				if (command_count = 1)
+				if (command_count == 1)
 					racctport = atoi(commands[1]);
 				else
 					wAddstr(IO,"Must specify valid port number after :racctport.\n");}
-			else if (strcmp(commands[0],"laccptip") == 0){
-				if (command_count = 1)
+			else if (strcmp(commands[0],"lacctip") == 0){
+				if (command_count == 1)
 					lacct_addr = commands[1];
 				else
 					wAddstr(IO,"Must specify valid IP number after :lacctip\n");}
 			else if (strcmp(commands[0],"racctip") == 0){
-				if (command_count = 1)
+				if (command_count == 1)
 					racct_addr = commands[1];
 				else
 					wAddstr(IO,"Must specify valid IP number after :racctip\n");}
@@ -644,7 +650,7 @@ main(int argc,char *argv[])
 					wAddstr(IO,"Already a left side. Use dropl and try agian\n");
 				else { 
 					/* If luseport is not set then use protoport value */
-					if (command_count = 2)
+					if (command_count == 1)
 						luseport = atoi(commands[1]);
 					if((left_passive_sock = create_server(luseport)) != -1){	
 						FD_SET(left_passive_sock, &inputs);
@@ -658,7 +664,7 @@ main(int argc,char *argv[])
 					wAddstr(IO,"Already a right side. Use dropr and try agian.\n");
 				else { 
 					/* If port specified use it. else use protoport value */
-					if (command_count = 2)
+					if (command_count == 1)
 						ruseport = atoi(commands[1]);
 					if((right_passive_sock = create_server(ruseport)) != -1){	
 						FD_SET(right_passive_sock, &inputs);
@@ -670,7 +676,7 @@ main(int argc,char *argv[])
 			else if (strcmp(commands[0],"connectl") == 0){
 				if (left_passive_sock != -1 || left_sock != -1)
 					wAddstr(IO,"Already a left side. Use dropl and try again.\n");
-				else if (command_count = 2) {
+				else if (command_count == 2) {
 					/* Get IP address */
 					lconnect_addr = commands[1];
 					/* Get port number */	
@@ -679,8 +685,7 @@ main(int argc,char *argv[])
 					if ((left_sock = create_client(lconnect_addr, luseport)) != -1){
 						wAddstr(IO,"Piggy has a valid left connection.\n");
 						FD_SET(right_sock, &inputs);
-					if (left_sock > max_fd)
-						max_fd = left_sock;}
+						max_fd = max(max_fd,left_sock);}
 					else
 						wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");}
 				else
@@ -688,7 +693,7 @@ main(int argc,char *argv[])
 			else if (strcmp(commands[0],"connectr") == 0){
 				if (right_passive_sock != -1 || right_sock != -1)
 					wAddstr(IO,"Already a right side. Use dropr and try again.\n");
-				else if (command_count = 2){
+				else if (command_count == 2){
 					/* Get IP address */
 					raddr = commands[1];
 					/* Get port number */	
@@ -697,15 +702,14 @@ main(int argc,char *argv[])
 					if ((right_sock = create_client(raddr, rport)) != -1){
 						wAddstr(IO,"Piggy has a valid right connection.\n");
 						FD_SET(right_sock, &inputs);
-						if (right_sock > max_fd)
-							max_fd = right_sock;}
+						max_fd = max(right_sock,max_fd);}
 					else
 						wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");}
 				 else 
 					wAddstr(IO,"Connect not made.Please enter in form :connectr addr port.\n");
 				}
 			else if (strcmp(commands[0],"read") == 0){
-				if (command_count = 1){
+				if (command_count == 1){
 					int read_fd = open(commands[1],O_RDONLY);
 					while ((stdin_n = read(read_fd,stdin_buf,BUF_SIZE)) > 0){
 						if (outputr && right_sock != -1){
@@ -718,7 +722,7 @@ main(int argc,char *argv[])
 					
 					if (stdin_n < 0)
 						wAddstr(IO,"Error reading file.\n");	
-					if (stdin_n = 0)
+					if (stdin_n == 0)
 						wAddstr(IO,"Seccessfully read whole file.\n");
 				
 					/*clean up */
@@ -772,7 +776,7 @@ main(int argc,char *argv[])
 						wAddstr(IO, "running script.\n");
 					else
 						wAddstr(IO, "error opening file");}
-				else if (command_count = 1){
+				else if (command_count == 1){
 					if ((script_fd = open(commands[1],O_RDONLY)) > 0)
 						wAddstr(IO, "running script.\n");
 					else
@@ -788,9 +792,8 @@ main(int argc,char *argv[])
 					wAddstr(IO,"External filter from left to right has been set");
 					exfilter_lr_bool = true;
 					FD_SET(read_pipe_lr, &inputs);
-						if (read_pipe_lr > max_fd)
-							max_fd = read_pipe_lr;
-					} 
+					max_fd = max(read_pipe_lr,max_fd);
+				} 
 				else
 					wAddstr(IO, "Must specify a command to set as filter");}
 			else if (strcmp(commands[0], "externalrl") == 0){
@@ -802,8 +805,7 @@ main(int argc,char *argv[])
 					wAddstr(IO,"External filter from right to left has been set");
 					exfilter_rl_bool = true;
 					FD_SET(read_pipe_rl, &inputs);
-						if (read_pipe_rl > max_fd)
-							max_fd = read_pipe_rl;
+					max_fd = max(max_fd, read_pipe_rl);
 					} 
 				else
 					wAddstr(IO, "Must specify a command to set as filter");}
@@ -813,11 +815,25 @@ main(int argc,char *argv[])
 			wrefresh(w[IO]);
 			command_n = 0;
 			command_ready = false;
-		}	
+		}
+////////////////////////////////////////////////////////////////////////////////////////////////////////
+/* Write from all bufs if write will not block */
+///////////////////////////////////////////////////////////////////////////////////////////////////////	
+		/* write to pipes if pipes will not block on write */
+		if (pipe_lr_n && FD_ISSET(write_pipe_lr, &outputs_loop) )	
+			pipe_lr_n = Write_buf(write_pipe_lr,pipe_lr_buf,pipe_lr_n);
+		if (pipe_rl_n && FD_ISSET(write_pipe_rl, &outputs_loop) )
+			pipe_rl_n = Write_buf(write_pipe_rl, pipe_rl_buf, pipe_rl_n); 	
 
+		/* Send contents of write_bufs to sockets */
+		if (left_write_n > 0 && FD_ISSET(left_sock, &outputs_loop))
+			left_write_n = Write_buf(left_sock, left_write_buf,left_write_n);
+		if (right_write_n > 0 && FD_ISSET(right_sock, &outputs_loop))
+			right_write_n = Write_buf(right_sock, right_write_buf, right_write_n);
 
-
-
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+/* Read from fd that are set by select */
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
 		/* read from left side. */	
 		if (FD_ISSET(left_sock,&inputs_loop)){
 			if ((left_n = read(left_sock,left_buf,sizeof(left_buf))) == 0){
@@ -869,12 +885,14 @@ main(int argc,char *argv[])
 					wAddstr(IO, "An error has occured. Closing filter");
 			}
 		}
-
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/* Process filters and logs */
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		/* process filters from left and sets left_n_out to left_n if data can be sent or zero if data must be read from the pipe  */
 		if (left_n != 0){
 			/* if externallr was set then pass through external filter */
 			if (exfilter_lr_bool){
-				write(write_pipe_lr,left_buf,left_n);
+				Fill_write_buf(pipe_lr_buf, &pipe_lr_n, left_buf, left_n);
 			} else{
 				/* process strip and post log commands then output to OUT_R */	
 				if (stlrnp_bool)
@@ -890,7 +908,7 @@ main(int argc,char *argv[])
 		if (right_n != 0){
 			/* if externalrl was set then pass through external filter */
 			if (exfilter_rl_bool){
-				write(write_pipe_rl,right_buf,right_n);
+				Fill_write_buf(pipe_rl_buf, &pipe_rl_n, right_buf, right_n);
 			} else{
 				/* process strip and post log commands then output to OUT_R */	
 				if (strlnp_bool)
@@ -948,14 +966,6 @@ main(int argc,char *argv[])
 			}
 			right_n_out = 0;
 		}
-		
-		/* Send contents of write_bufs to sockets */
-		if (left_write_n > 0 && FD_ISSET(left_sock, &outputs_loop)){
-			left_write_n = Write_buf(left_sock, left_write_buf,left_write_n);
-		}
-		if (right_write_n > 0 && FD_ISSET(right_sock, &outputs_loop)){
-			right_write_n = Write_buf(right_sock, right_write_buf, right_write_n);
-		}
 	}
 }
 
@@ -1001,8 +1011,7 @@ void wAddnstr(int i, char *s,int n){
 				mvwaddch(w[i],wrpos[i],wcpos[i],(chtype) s[j]);
 			else {
 				char hex_buf[5];
-				sprintf(hex_buf,"0x%x",s[j]);
-				//wAddnstr(i,hex_buf,5);
+				sprintf(hex_buf,"0x%5x",s[j]);
 			}
     		}
 	}
@@ -1045,7 +1054,6 @@ void Fill_write_buf(char *write_buf,int *write_n, char* in_buf, int in_n){
 		if (*write_n < BUF_SIZE)
 			write_buf[(*write_n)++] = in_buf[i];
 	}
-	wAddnstr(IO, write_buf,*write_n); 
 }
 
 /* Write buf to socket from 0 to n. If n space is not available then the unsent data is moved to be beginning of buf */
@@ -1204,7 +1212,6 @@ char *peer_info(int sock){
 /* Returns a str in the form my_IP:my_port */
 char *my_info(int sock,int port){
 	struct sockaddr_in myaddr;
-	socklen_t my_addr_len = sizeof(myaddr);
 	char straddr[INET_ADDRSTRLEN];
 	char myport_str[6];
 	static char return_str[23];
@@ -1272,15 +1279,12 @@ int Accept(int sock_in,char* acct_addr,int acct_port){
 
 	/* put socket into non-blocking mode */
 	int flags = fcntl(return_sock, F_GETFL, 0);
-	flags = (flags & ~O_NONBLOCK);
-	fcntl(return_sock, F_SETFL, flags);
+	fcntl(return_sock, F_SETFL, flags | O_NONBLOCK);
 
 	/* add left_sock to inputs and return*/
 	if (return_sock > 0){
 		FD_SET(return_sock,&inputs);
-		if (return_sock > max_fd)
-			max_fd = return_sock;
-		FD_SET(return_sock,&outputs);
+		max_fd = max(max_fd,return_sock);
 		return return_sock;}
 	else
 		return -1;
