@@ -572,8 +572,8 @@ main(int argc,char *argv[])
 					wAddstr(IO,"No left side connection to drop.\n");}
 			else if (strcmp(commands[0],"dropr") == 0){
 				if (right_passive_sock != -1 || right_sock != -1){
-					Close(&right_sock);
 					Close(&right_passive_sock);
+					Close(&right_sock);
 					wAddstr(IO,"Dropped the right side connection.\n");}
 				else
 					wAddstr(IO,"No right side connection to drop.\n");}
@@ -637,7 +637,8 @@ main(int argc,char *argv[])
 						luseport = atoi(commands[1]);
 					if((left_passive_sock = create_server(luseport)) != -1){	
 						FD_SET(left_passive_sock, &inputs);
-						max_fd = max(max_fd,left_passive_sock);}
+						if (left_passive_sock > max_fd)
+							max_fd = left_passive_sock;}
 					else
 						wAddstr(IO,"An error has occured creating the left connection. Piggy does not have a left side.\n");
 				}}
@@ -650,7 +651,8 @@ main(int argc,char *argv[])
 						ruseport = atoi(commands[1]);
 					if((right_passive_sock = create_server(ruseport)) != -1){	
 						FD_SET(right_passive_sock, &inputs);
-						max_fd = (max_fd,right_passive_sock);}
+						if (right_passive_sock > max_fd)
+							max_fd = right_passive_sock;}
 					else
 						wAddstr(IO,"An error has occured creating the right connection. Piggy does not have a right side.\n");
 				}}
@@ -799,7 +801,7 @@ main(int argc,char *argv[])
 
 		/* Send contents of write_bufs to sockets */
 		if (left_write_n > 0 && FD_ISSET(left_sock, &outputs_loop))
-			left_write_n = Write_buf(left_sock, left_write_buf, left_write_n);
+			left_write_n = Write_buf(left_sock, left_write_buf,left_write_n);
 		if (right_write_n > 0 && FD_ISSET(right_sock, &outputs_loop))
 			right_write_n = Write_buf(right_sock, right_write_buf, right_write_n);
 
@@ -817,11 +819,12 @@ main(int argc,char *argv[])
 					wAddstr(IO,"Error reading file.\n");	
 				if (read_n == 0)
 					wAddstr(IO,"Seccessfully read whole file.\n");
-				Close(&read_fd);
+				FD_CLR(read_fd,&inputs_loop);
+				close(read_fd);
+				read_fd = -1;
 			}
 			/* set stdin_n to new value */
-			stdin_n += read_n;
-			output_stdin = true;	
+			stdin_n += read_n;	
 		}
 
 		/* read from left side. */	
@@ -829,9 +832,8 @@ main(int argc,char *argv[])
 			if ((left_n = read(left_sock,left_buf,sizeof(left_buf))) == 0){
 				wAddstr(IO,"Lost connection to left side. \n");	
 				Close(&left_sock);}
-			else if (left_n < 0){
+			else if (left_n < 0)
 				wAddstr(IO, "Error reading from left socket");
-				Close(&left_sock);}
 			else { // Display input from left to top left corner
 				if (loglrpre_fd != -1)
 					write(loglrpre_fd, left_buf, left_n);		
@@ -844,9 +846,6 @@ main(int argc,char *argv[])
 			if ((right_n = read(right_sock, right_buf,sizeof(right_buf))) == 0){
 				wAddstr(IO,"Lost connection to right side. \n");
 				Close(&right_sock);}
-			else if (right_n < 0){
-				wAddstr(IO, "Error reading from right socket");
-				Close(&right_sock);}
 			else{ // Display input from right to bottom right corner
 				if (logrlpre_fd != -1)
 					write(logrlpre_fd, right_buf, right_n);		
@@ -857,9 +856,8 @@ main(int argc,char *argv[])
 		/* read from left pipe */
 		if (exfilter_lr_bool && FD_ISSET(read_pipe_lr,&inputs_loop)){
 			if ( (left_n_out = read(read_pipe_lr,left_buf,BUF_SIZE)) <= 0){
-				Close(&read_pipe_lr);
+				close(read_pipe_lr);
 				close(write_pipe_lr);
-				write_pipe_lr = -1;
 				exfilter_lr_bool = false;
 				if (left_n_out == 0)
 					wAddstr(IO, "External command has finished");
@@ -871,9 +869,8 @@ main(int argc,char *argv[])
 		/* read from right pipe */
 		if (exfilter_rl_bool && FD_ISSET(read_pipe_rl,&inputs_loop)){
 			if ( (right_n_out = read(read_pipe_rl,right_buf,BUF_SIZE)) <= 0){
-				Close(&read_pipe_rl);
+				close(read_pipe_rl);
 				close(write_pipe_rl);
-				read_pipe_lr = -1;
 				exfilter_rl_bool = false;
 				if (right_n_out == 0)
 					wAddstr(IO, "External command has finished");
@@ -896,7 +893,7 @@ main(int argc,char *argv[])
 			else if (outputl && left_sock != -1){
 				if (logrlpre_fd != -1)
 					write(logrlpre_fd, stdin_buf, stdin_n);
-				Fill_write_buf(left_write_buf, &left_write_n, stdin_buf,stdin_n);
+				Fill_write_buf(left_write_buf, &right_write_n, stdin_buf,stdin_n);
 				wAddnstr(OUT_L,stdin_buf,stdin_n);}
 			else
 				wAddstr(IO,"Unable to output string. Check your output and loop settings are correct and try again.\n");
@@ -1176,8 +1173,8 @@ void logset(int *fd, char *file_name[],int arg_count){
 
 /* wrapper for close the removes the socket from inputs and sets sock to -1 */
 void Close(int *sock){
-	FD_CLR(*sock,&inputs);
 	closesocket(*sock);
+	FD_CLR(*sock,&inputs);
 	*sock = -1;
 }
 
