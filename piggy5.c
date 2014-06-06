@@ -17,8 +17,9 @@
 #include <unistd.h>
 #include <errno.h>
 
-
+// other defines and global variables
 #define MAX_COMMAND_COUNT 13
+#define BUF_SIZE 1024
 #define PROTOPORT 36790 /* default protocol port number */
 #define QLEN 6 /* size of request queue */
 extern int errno;
@@ -28,7 +29,7 @@ struct protoent *ptrp; /* pointer to a protocol table entry */
 int max_fd;
 fd_set inputs; /* set of selector to be passed to select */
 fd_set outputs; /* set of selectors to be passed to select for writing */
-
+#define max(x,y) ((x) > (y) ? (x) : (y))
 void sys_err(char *s){
 	printf("%s\n",s);
 	exit(1);
@@ -60,6 +61,13 @@ void wAddnstr(int i, char *s,int n);
 
 /* fills the buffer from curses getchar starting at spot n + 1 */
 void fillbuf(char *buf,char char_in,int *n);
+
+/* Fills a write buffer stating at write_n with contents of in buffer till cell n of in buffer */
+void Fill_write_buf(char *write_buf,int *write_n, char* in_buf, int in_n);
+
+/* Write buf to socket from 0 to n. If n space is not available then the unsent data is moved to be beginning of buf */
+/* returns new value of n which could be less then 0 if not all data could be writen*/
+int Write_buf(int fd, char *buf,int n);
 
 /* starts an external command and fills pipein and pipeout with the in and out pipe file descriptors */
 /* command[0] must contain the name of command and the remaining cells contain the arguments. */
@@ -145,6 +153,7 @@ main(int argc,char *argv[])
 	int input_ready;
 	struct timeval timeout;
 	timeout.tv_sec = .05;
+	FD_ZERO(&inputs);
 
 	/* loop through arguments and set values */
 	bool no_left  = false; 	/* holds value of command line argument -noleft */
@@ -315,18 +324,17 @@ main(int argc,char *argv[])
 	/* For left side */	
 	int left_sock = -1; 			/* socket descriptor for accept socket */
 	char *lconnect_addr = NULL;
-	char left_buf[1000]; 			/* buffer for string the server reads*/
+	char left_buf[BUF_SIZE]; 			/* buffer for string the server reads*/
 	int left_n = 0; 			/* number of characters read from input stream */
 	/* For right side */
 	int right_passive_sock = -1; 		/* socket descriptor for right side server */ 	
 	int ruseport  = PROTOPORT;
 	int racctport = -1;
 	char *racct_addr = NULL;	
-	char right_buf[1000]; 			/* buffer for string the server sends */
+	char right_buf[BUF_SIZE]; 			/* buffer for string the server sends */
 	int right_n = 0; 			/* number of characters read to go to output stream*/
 	/* For keyboard input */
-	const int stdin_buf_size = 1000;
-	char stdin_buf[stdin_buf_size]; 	/* buffer for insert mode */
+	char stdin_buf[BUF_SIZE]; 	/* buffer for insert mode */
 	int stdin_n = 0; 			/* number of characters read in insert mode */
 	const int command_buf_size = 100;	/* constant for size of command buf */
 	char command_buf[command_buf_size];	/* buffer the hold command mode input */	
@@ -368,14 +376,24 @@ main(int argc,char *argv[])
 	/* script */
 	char cur_char_s; // the current char when processing scripts
 	fd_set inputs_loop = inputs;
-
 	FD_ZERO(&outputs);
-
-	//fd_set outputs_loop = outputs;
+	fd_set outputs_loop;
+	/* output buffers */
+	char left_write_buf[BUF_SIZE];	/* buffer for input waiting to be sent to left_sock */
+	int left_write_n = 0;		/* number of bytes in left_write_n */
+	int right_write_n = 0;		/* number of bytes in right_write_n */
+	char right_write_buf[BUF_SIZE];	/* buffer for input waiting to be sent to right_sock */
 	while (1) {
 		inputs_loop = inputs;
-	//	outputs_loop = outputs;
-		input_ready = select(max_fd+1,&inputs_loop,NULL,NULL,&timeout);
+		if (right_sock != -1 || left_sock != -1 || exfilter_rl_bool || exfilter_lr_bool){	
+			FD_ZERO(&outputs_loop);
+			if (right_sock > 0)
+				FD_SET(right_sock, &outputs_loop);
+			if (left_sock > 0)
+				FD_SET(left_sock, &outputs_loop);}
+
+		input_ready = select(max_fd+1,&inputs_loop,&outputs_loop,NULL,&timeout);
+		
 		/* accepts incoming client from left side and assigns to left_sock */	
 		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
 			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
@@ -416,7 +434,7 @@ main(int argc,char *argv[])
 					wmove(w[IO],wrpos[IO],wcpos[IO]);}
 				else {
 					fillbuf(stdin_buf,cur_char,&stdin_n);
-					if (stdin_buf[stdin_n - 1] == '\n' || stdin_n == stdin_buf_size){
+					if (stdin_buf[stdin_n - 1] == '\n' || stdin_n == BUF_SIZE){
 						stdin_buf[stdin_n] = 0;
 						output_stdin = true;
 					}
@@ -440,7 +458,7 @@ main(int argc,char *argv[])
 				else {
 					fillbuf(command_buf,cur_char,&command_n);
 					/* Put command into commands[]*/
-					if (command_buf[command_n - 1] == '\n' || command_n == command_buf_size){
+					if (command_buf[command_n - 1] == '\n' || command_n == BUF_SIZE){
 						command = false;	
 						command_ready = true;	
 						/* clear command and reset curser to top of IO */	
@@ -468,7 +486,7 @@ main(int argc,char *argv[])
 				/* check if insert mode */
 				else if (cur_char_s == 'i'){
 					stdin_n = 0;
-					while((cur_char_s = getChar(script_fd)) != EOF && (cur_char_s != ':') && stdin_n < (stdin_buf_size - 1))
+					while((cur_char_s = getChar(script_fd)) != EOF && (cur_char_s != ':') && stdin_n < (BUF_SIZE - 1))
 						stdin_buf[stdin_n++] = cur_char_s;  
 					stdin_buf[stdin_n] = 0;
 					output_stdin = true;}
@@ -689,7 +707,7 @@ main(int argc,char *argv[])
 			else if (strcmp(commands[0],"read") == 0){
 				if (command_count = 1){
 					int read_fd = open(commands[1],O_RDONLY);
-					while ((stdin_n = read(read_fd,stdin_buf,1000)) > 0){
+					while ((stdin_n = read(read_fd,stdin_buf,BUF_SIZE)) > 0){
 						if (outputr && right_sock != -1){
 							write(right_sock,stdin_buf,stdin_n);
 							wAddnstr(OUT_R,stdin_buf,stdin_n);}
@@ -828,7 +846,7 @@ main(int argc,char *argv[])
 
 		/* read from left pipe */
 		if (exfilter_lr_bool && FD_ISSET(read_pipe_lr,&inputs_loop)){
-			if ( (left_n_out = read(read_pipe_lr,left_buf,1000)) <= 0){
+			if ( (left_n_out = read(read_pipe_lr,left_buf,BUF_SIZE)) <= 0){
 				close(read_pipe_lr);
 				close(write_pipe_lr);
 				exfilter_lr_bool = false;
@@ -841,7 +859,7 @@ main(int argc,char *argv[])
 
 		/* read from right pipe */
 		if (exfilter_rl_bool && FD_ISSET(read_pipe_rl,&inputs_loop)){
-			if ( (right_n_out = read(read_pipe_rl,right_buf,1000)) <= 0){
+			if ( (right_n_out = read(read_pipe_rl,right_buf,BUF_SIZE)) <= 0){
 				close(read_pipe_rl);
 				close(write_pipe_rl);
 				exfilter_rl_bool = false;
@@ -865,9 +883,7 @@ main(int argc,char *argv[])
 					strip_npxeol(left_buf, &left_n);
 				left_n_out = left_n;// signals that data is ready to leave from the left	
 			}
-		
 			left_n = 0;
-				
 		}	
 		
 		/* process filters from right and sets right_n_out to right_n if data can be sent or zero if data must be read from the pipe  */
@@ -883,19 +899,17 @@ main(int argc,char *argv[])
 					strip_npxeol(left_buf, &right_n);
 				right_n_out = right_n;// signals that data is ready to leave from the right
 			}
-		
 			right_n = 0;
-				
 		}
 
-		/* Output contents of left and right buffer if data is present */
+		/* Sends contents of left and right buffer to the appropreate write_buffer*/
  		if (left_n_out != 0){
 			if (loglrpost_fd != -1)
 				write(loglrpost_fd, left_buf, left_n_out);
 			
 			wAddnstr(OUT_R,left_buf,left_n_out);
 			if (!loopr && right_sock != -1)
-				write(right_sock,left_buf,left_n_out);
+				Fill_write_buf(right_write_buf, &right_write_n, left_buf, left_n_out);
 			else if (loopr && left_sock != -1){
 				wAddnstr(IN_R,left_buf,left_n_out);
 				if (logrlpre_fd != -1)
@@ -907,23 +921,19 @@ main(int argc,char *argv[])
 					strip_npxeol(left_buf, &left_n_out);
 				if (logrlpost_fd != -1)
 					write(logrlpost_fd, left_buf, left_n_out);
-				write(left_sock,left_buf,left_n_out);
+				Fill_write_buf(left_write_buf, &left_write_n, left_buf, left_n_out);
 				wAddnstr(OUT_L,left_buf,left_n_out);
 			}
 			left_n_out = 0;
 		}
 		if (right_n_out != 0){
 			/* process strip and post log commands then output to OUT_L */
-			if (strlnp_bool)
-				strip_np(right_buf, &right_n_out);
-			if (strlnpx_bool)
-				strip_npxeol(right_buf, &right_n_out);
 			if (logrlpost_fd != -1)
 				write(logrlpost_fd, right_buf, right_n_out);
 			wAddnstr(OUT_L,right_buf,right_n_out);
 
 			if (!loopl && left_sock != -1)
-				write(left_sock, right_buf, right_n_out);
+				Fill_write_buf(left_write_buf, &left_write_n, right_buf, right_n_out);
 			else if (loopl && right_sock != -1){
 				if (loglrpre_fd != -1)
 					write(logrlpre_fd, right_buf, right_n_out);
@@ -933,10 +943,18 @@ main(int argc,char *argv[])
 					strip_npxeol(right_buf, &right_n_out);
 				if (loglrpost_fd != -1)
 					write(logrlpost_fd, right_buf, right_n_out);
-				write(right_sock,right_buf,right_n_out);
+				Fill_write_buf(right_write_buf, &right_write_n, right_buf,right_n_out);
 				wAddnstr(OUT_R,right_buf,right_n_out);
 			}
 			right_n_out = 0;
+		}
+		
+		/* Send contents of write_bufs to sockets */
+		if (left_write_n > 0 && FD_ISSET(left_sock, &outputs_loop)){
+			left_write_n = Write_buf(left_sock, left_write_buf,left_write_n);
+		}
+		if (right_write_n > 0 && FD_ISSET(right_sock, &outputs_loop)){
+			right_write_n = Write_buf(right_sock, right_write_buf, right_write_n);
 		}
 	}
 }
@@ -1019,6 +1037,27 @@ void fillbuf(char *buf, char char_in,int *n){
 	}
 }
 
+/* Fills a write buffer starting at write_n with contents of in buffer till cell n of in buffer */
+/* Write buf must be size BUF_SIZE which is defined at the top */
+void Fill_write_buf(char *write_buf,int *write_n, char* in_buf, int in_n){
+	int i;
+	for (i = 0;i < in_n  ;i++){
+		if (*write_n < BUF_SIZE)
+			write_buf[(*write_n)++] = in_buf[i];
+	}
+	wAddnstr(IO, write_buf,*write_n); 
+}
+
+/* Write buf to socket from 0 to n. If n space is not available then the unsent data is moved to be beginning of buf */
+int Write_buf(int fd, char *buf,int n){
+	int write_n;
+	int new_buf_size = 0;
+	if ( (write_n = write(fd,buf,n)) < n){
+		/* We couldn't write the whole buf so save back into buf */
+		Fill_write_buf(buf, &new_buf_size, &buf[write_n], n - write_n);
+	}
+	return new_buf_size;
+}
 /******************************************************************************************/
 /* Functions for commands */
 /******************************************************************************************/
@@ -1029,10 +1068,6 @@ void pOpen(char **command,int arg_count, int *pipein, int *pipeout){
 	int fds1[2];
 	int fds2[2];
 	pid_t pid;
-	wAddstr(IO, command[0]);
-	char buf[15];
-	sprintf(buf, "arg_count is %d\n", arg_count);
-	wAddnstr(IO, buf,14);
 	/* Create two pipes.
 	File descriptors for the two ends of the pipe are placed in fds.
 	The read end of the pipe is at [0] the write end of the pipe is at [1]
@@ -1234,12 +1269,18 @@ int Accept(int sock_in,char* acct_addr,int acct_port){
 			return -1;	
 		}	
 	}
-	
+
+	/* put socket into non-blocking mode */
+	int flags = fcntl(return_sock, F_GETFL, 0);
+	flags = (flags & ~O_NONBLOCK);
+	fcntl(return_sock, F_SETFL, flags);
+
 	/* add left_sock to inputs and return*/
 	if (return_sock > 0){
 		FD_SET(return_sock,&inputs);
 		if (return_sock > max_fd)
 			max_fd = return_sock;
+		FD_SET(return_sock,&outputs);
 		return return_sock;}
 	else
 		return -1;
