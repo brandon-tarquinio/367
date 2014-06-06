@@ -384,25 +384,48 @@ main(int argc,char *argv[])
 	int right_write_n = 0;		/* number of bytes in right_write_n */
 	char right_write_buf[BUF_SIZE];	/* buffer for input waiting to be sent to right_sock */
 	while (1) {
+		//inputs_loop = inputs;
+		/* build inputs_loop fd_set */
+		FD_ZERO(&inputs_loop);
 		inputs_loop = inputs;
-		if (right_sock != -1 || left_sock != -1 || exfilter_rl_bool || exfilter_lr_bool){	
-			FD_ZERO(&outputs_loop);
-			if (right_sock > 0)
-				FD_SET(right_sock, &outputs_loop);
-			if (left_sock > 0)
-				FD_SET(left_sock, &outputs_loop);}
+		/*
+		if (left_passive_sock != -1){
+			FD_SET(left_passive_sock, &inputs_loop);
+			max_fd = max(max_fd, left_passive_sock);}
+		if (right_passive_sock != -1){
+			FD_SET(right_passive_sock, &inputs_loop);
+			max_fd = max(max_fd, right_passive_sock);}
+		if (right_sock != -1){
+			FD_SET(right_sock, &inputs_loop);
+			max_fd = max(max_fd, right_sock);}
+		if (left_sock != -1){
+			FD_SET(left_sock, &inputs_loop);
+			max_fd = max(max_fd, left_sock);}
+		*/
 
-		input_ready = select(max_fd+1,&inputs_loop,&outputs_loop,NULL,&timeout);
+		/* build outputs_loop fd_set */ 
+		FD_ZERO(&outputs_loop);
+		if (right_sock != -1)
+			FD_SET(right_sock, &outputs_loop);
+		if (left_sock != -1)
+			FD_SET(left_sock, &outputs_loop);
 		
+		struct timeval timeout = {0,0};	
+		if ( input_ready = select(max_fd+1,&inputs_loop,&outputs_loop,NULL,&timeout) < 0){
+			wAddstr(IO, "error in select call");
+			continue;
+		}
+	
 		/* accepts incoming client from left side and assigns to left_sock */	
-		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop))	
+		if (left_passive_sock != -1 && FD_ISSET(left_passive_sock,&inputs_loop)){	
 			if ((left_sock = Accept(left_passive_sock,lacct_addr,lacctport)) != -1)
-				wAddstr(IO,"Piggy established a valid left connection.\n");
-		
-		if (right_passive_sock != -1 && FD_ISSET(right_passive_sock,&inputs_loop))
+				wAddstr(IO,"Piggy established a valid left connection.\n");}
+
+
+		if (right_passive_sock != -1 && FD_ISSET(right_passive_sock,&inputs_loop)){
 			if ((right_sock = Accept(right_passive_sock,racct_addr,racctport)) != -1)
-				wAddstr(IO,"Piggy established a valid right connection.\n");	
-		
+				wAddstr(IO,"Piggy established a valid right connection.\n");}
+	
 		/* read input from curses input */
 		char cur_char;
 		halfdelay(10);	
@@ -837,6 +860,9 @@ main(int argc,char *argv[])
 			if ((right_n = read(right_sock, right_buf,sizeof(right_buf))) == 0){
 				wAddstr(IO,"Lost connection to right side. \n");
 				Close(&right_sock);}
+			else if (right_n < 0){
+				wAddstr(IO, "Error reading from right socket");
+				Close(&right_sock);}
 			else{ // Display input from right to bottom right corner
 				if (logrlpre_fd != -1)
 					write(logrlpre_fd, right_buf, right_n);		
@@ -951,7 +977,9 @@ main(int argc,char *argv[])
 		
 		/* Send contents of write_bufs to sockets */
 		if (left_write_n > 0 && FD_ISSET(left_sock, &outputs_loop)){
+			wAddstr(IO,"I went in here");
 			left_write_n = Write_buf(left_sock, left_write_buf,left_write_n);
+			wAddstr(IO,"And now i am here");	
 		}
 		if (right_write_n > 0 && FD_ISSET(right_sock, &outputs_loop)){
 			right_write_n = Write_buf(right_sock, right_write_buf, right_write_n);
